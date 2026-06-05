@@ -1,0 +1,20 @@
+{
+  "cleanUrls": true,
+  "headers": [
+    {
+      "source": "/sw.js",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
+        }
+      ]
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/((?!sw.js|manifest.webmanifest|config.js|app.js|styles.css|nutrivetm-hero.png|icon-192.svg|icon-512.svg).*)",
+      "destination": "/index.html"
+    }
+  ]
+}

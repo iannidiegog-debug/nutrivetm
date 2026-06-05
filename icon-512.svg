@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="NutriVetM">
+  <rect width="512" height="512" rx="96" fill="#4f8f6b"/>
+  <circle cx="176" cy="218" r="40" fill="#ddefe5"/>
+  <circle cx="336" cy="218" r="40" fill="#ddefe5"/>
+  <circle cx="224" cy="138" r="38" fill="#ffffff"/>
+  <circle cx="288" cy="138" r="38" fill="#ffffff"/>
+  <path d="M150 336c0-64 48-106 106-106s106 42 106 106c0 42-34 70-78 70h-56c-44 0-78-28-78-70Z" fill="#ffffff"/>
+  <path d="M190 324c22 22 110 22 132 0" fill="none" stroke="#c9785a" stroke-width="22" stroke-linecap="round"/>
+</svg>
