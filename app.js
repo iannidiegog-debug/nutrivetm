@@ -196,8 +196,11 @@ const views = [
   { id: "settings", label: "Integraciones", icon: "settings" },
 ];
 
+const appointmentSlots = ["09:00", "09:30", "10:00", "10:30", "11:00", "15:30", "16:00", "16:30", "17:00"];
+
 const tutorViews = [
   { id: "tutor-home", label: "Inicio", icon: "home" },
+  { id: "tutor-calendar", label: "Turnos", icon: "calendar" },
   { id: "tutor-pet", label: "Mi mascota", icon: "paw" },
   { id: "tutor-plan", label: "Plan", icon: "bowl" },
   { id: "tutor-faq", label: "FAQ", icon: "help" },
@@ -292,9 +295,9 @@ function renderTopbar() {
         <h1>${getTitle()}</h1>
       </div>
       <div class="top-actions">
-        <button class="ghost-button" data-view="${store.activeRole === "vet" ? "calendar" : "tutor-urgent"}">
+        <button class="ghost-button" data-view="${store.activeRole === "vet" ? "calendar" : "tutor-calendar"}">
           <span class="icon">${icons.calendar}</span>
-          ${store.activeRole === "vet" ? "Agenda" : "Solicitar urgencia"}
+          ${store.activeRole === "vet" ? "Agenda" : "Elegir turno"}
         </button>
         <button class="alert-button" data-view="${store.activeRole === "vet" ? "dashboard" : "tutor-home"}">
           <span class="icon">${icons.bell}</span>
@@ -316,6 +319,7 @@ function getTitle() {
     faq: "Preguntas frecuentes",
     settings: "Integraciones",
     "tutor-home": "Hola, Agustin",
+    "tutor-calendar": "Elegir turno",
     "tutor-pet": "Ficha de Mora",
     "tutor-plan": "Plan de Mora",
     "tutor-faq": "Preguntas frecuentes",
@@ -340,6 +344,7 @@ function renderVetView() {
 function renderTutorView() {
   const sections = {
     "tutor-home": renderTutorHome,
+    "tutor-calendar": renderTutorCalendar,
     "tutor-pet": renderTutorPet,
     "tutor-plan": renderTutorPlan,
     "tutor-faq": () => renderFaq({ tutor: true }),
@@ -456,7 +461,6 @@ function renderPatientRow(pet) {
 }
 
 function renderCalendar() {
-  const slots = ["09:00", "09:30", "10:00", "10:30", "11:00", "15:30", "16:00", "16:30", "17:00"];
   return `
     <div class="content-grid">
       <section class="panel wide">
@@ -474,7 +478,7 @@ function renderCalendar() {
               return `
                 <article class="day-column">
                   <h3>${day.toLocaleDateString("es-AR", { weekday: "short", day: "2-digit", month: "2-digit" })}</h3>
-                  ${slots
+                  ${appointmentSlots
                     .map((slot) => {
                       const apt = store.appointments.find(
                         (item) => item.date === toDateInput(day) && item.time === slot
@@ -502,6 +506,65 @@ function renderCalendar() {
         </div>
         <p class="muted">El tutor no reserva automaticamente una urgencia. La app crea alerta, Melanie evalua y habilita un turno o responde con indicaciones.</p>
         <div class="stack">${store.urgentRequests.map(renderUrgency).join("")}</div>
+      </section>
+    </div>
+  `;
+}
+
+function renderTutorCalendar() {
+  const pet = getPet("mora");
+  const petAppointments = store.appointments.filter((item) => item.petId === pet.id);
+  return `
+    <div class="content-grid">
+      <section class="panel wide">
+        <div class="section-heading">
+          <div>
+            <span class="eyebrow">Agenda de Melanie</span>
+            <h2>Turnos disponibles</h2>
+          </div>
+          <span class="badge">Consulta comun</span>
+        </div>
+        <p class="muted">Elegi un horario libre para solicitar turno. Melanie lo vera como pendiente y podra confirmarlo desde su agenda.</p>
+        <div class="calendar-board tutor-calendar">
+          ${[0, 1, 2, 3, 4]
+            .map((offset) => {
+              const day = addDays(today, offset);
+              const date = toDateInput(day);
+              return `
+                <article class="day-column">
+                  <h3>${day.toLocaleDateString("es-AR", { weekday: "short", day: "2-digit", month: "2-digit" })}</h3>
+                  ${appointmentSlots
+                    .map((slot) => {
+                      const apt = store.appointments.find((item) => item.date === date && item.time === slot);
+                      const mine = apt?.petId === pet.id;
+                      return `
+                        <button class="slot ${apt ? (mine ? "mine" : "busy") : "available"}" ${apt ? "disabled" : ""} data-book-slot="${date}|${slot}">
+                          <span>${slot}</span>
+                          <small>${apt ? (mine ? `${pet.name} · ${apt.status}` : "Ocupado") : "Solicitar"}</small>
+                        </button>
+                      `;
+                    })
+                    .join("")}
+                </article>
+              `;
+            })
+            .join("")}
+        </div>
+      </section>
+      <section class="panel">
+        <div class="section-heading">
+          <div>
+            <span class="eyebrow">Mora</span>
+            <h2>Mis turnos</h2>
+          </div>
+        </div>
+        <div class="stack">
+          ${
+            petAppointments.length
+              ? petAppointments.map((item) => renderAppointment(item)).join("")
+              : `<div class="empty-state"><h3>Sin turnos pedidos</h3><p>Cuando solicites uno, va a quedar aca como pendiente.</p></div>`
+          }
+        </div>
       </section>
     </div>
   `;
@@ -995,6 +1058,28 @@ function bindEvents() {
         status: "A confirmar por tutor",
       });
       alert("Se habilito un turno urgente y quedo listo para notificar al tutor.");
+      render();
+    });
+  });
+
+  document.querySelectorAll("[data-book-slot]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const [date, time] = button.dataset.bookSlot.split("|");
+      const slotTaken = store.appointments.some((item) => item.date === date && item.time === time);
+      if (slotTaken) {
+        alert("Ese horario ya no esta disponible.");
+        render();
+        return;
+      }
+      store.appointments.unshift({
+        id: crypto.randomUUID(),
+        date,
+        time,
+        kind: "Consulta solicitada",
+        petId: "mora",
+        status: "Pendiente",
+      });
+      alert("Solicitud enviada a Melanie. El turno queda pendiente de confirmacion.");
       render();
     });
   });
