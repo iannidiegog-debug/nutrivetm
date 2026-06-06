@@ -3,9 +3,11 @@ import { appConfig } from "./config.js";
 const today = new Date("2026-06-05T12:00:00-03:00");
 
 const store = {
+  isAuthenticated: false,
   activeRole: "vet",
   activeView: "dashboard",
   selectedPetId: "mora",
+  patientDetailOpen: false,
   faqs: [
     {
       id: "faq-1",
@@ -218,6 +220,8 @@ const icons = {
     '<svg viewBox="0 0 24 24"><path d="M8 2v4"/><path d="M16 2v4"/><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M3 10h18"/></svg>',
   check:
     '<svg viewBox="0 0 24 24"><path d="m20 6-11 11-5-5"/></svg>',
+  arrow:
+    '<svg viewBox="0 0 24 24"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>',
   file:
     '<svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8"/><path d="M16 17H8"/><path d="M10 9H8"/></svg>',
   grid:
@@ -240,6 +244,11 @@ const icons = {
 
 function render() {
   const app = document.querySelector("#app");
+  if (!store.isAuthenticated) {
+    app.innerHTML = renderLogin();
+    bindEvents();
+    return;
+  }
   app.innerHTML = `
     <main class="shell ${store.activeRole === "tutor" ? "tutor-mode" : ""}">
       ${renderSidebar()}
@@ -250,6 +259,54 @@ function render() {
     </main>
   `;
   bindEvents();
+}
+
+function renderLogin() {
+  return `
+    <main class="login-shell">
+      <section class="login-visual">
+        <img src="nutrivetm-hero.png" alt="Consultorio veterinario moderno con perro y gato" />
+        <div class="login-copy">
+          <span class="brand-mark">NM</span>
+          <span class="eyebrow">${appConfig.appName}</span>
+          <h1>Acceso al seguimiento nutricional veterinario.</h1>
+          <p>Esta pantalla queda lista para conectar despues con Supabase Auth: email, usuario, contrasena y permisos por rol.</p>
+        </div>
+      </section>
+      <section class="login-panel">
+        <div>
+          <span class="eyebrow">Ingresar</span>
+          <h2>Elegir perfil</h2>
+        </div>
+        <div class="login-role-grid">
+          <button class="login-role ${store.activeRole === "vet" ? "selected" : ""}" data-login-role="vet">
+            <span class="icon">${icons.settings}</span>
+            <strong>Melanie / Admin</strong>
+            <small>Agenda, pacientes, planes y biblioteca.</small>
+          </button>
+          <button class="login-role ${store.activeRole === "tutor" ? "selected" : ""}" data-login-role="tutor">
+            <span class="icon">${icons.paw}</span>
+            <strong>Tutor</strong>
+            <small>Turnos, ficha, plan, FAQ y urgencias.</small>
+          </button>
+        </div>
+        <form class="login-form" data-login-form>
+          <label>
+            Usuario
+            <input name="username" autocomplete="username" placeholder="melanie o tutor.demo" />
+          </label>
+          <label>
+            Contrasena
+            <input name="password" type="password" autocomplete="current-password" placeholder="Demo sin validar" />
+          </label>
+          <button class="primary-button submit" type="submit">
+            <span class="icon">${icons.check}</span>
+            Entrar como ${store.activeRole === "vet" ? "Melanie" : "Tutor"}
+          </button>
+        </form>
+      </section>
+    </main>
+  `;
 }
 
 function renderSidebar() {
@@ -281,6 +338,7 @@ function renderSidebar() {
           <button class="${store.activeRole === "vet" ? "selected" : ""}" data-role="vet">Veterinaria</button>
           <button class="${store.activeRole === "tutor" ? "selected" : ""}" data-role="tutor">Tutor</button>
         </div>
+        <button class="soft-button compact logout-button" data-logout>Salir</button>
       </div>
     </aside>
   `;
@@ -288,8 +346,15 @@ function renderSidebar() {
 
 function renderTopbar() {
   const pendingDocs = store.pets.filter((pet) => pet.status.includes("Pendiente")).length;
+  const homeView = getHomeView();
+  const canGoBack = store.activeView !== homeView || (store.activeView === "patients" && store.patientDetailOpen);
   return `
     <header class="topbar">
+      ${
+        canGoBack
+          ? `<button class="ghost-button mobile-back" data-back-home><span class="icon">${icons.arrow}</span>Volver</button>`
+          : ""
+      }
       <div>
         <span class="eyebrow">Consultorio nutricional veterinario</span>
         <h1>${getTitle()}</h1>
@@ -307,6 +372,10 @@ function renderTopbar() {
       </div>
     </header>
   `;
+}
+
+function getHomeView(role = store.activeRole) {
+  return role === "vet" ? "dashboard" : "tutor-home";
 }
 
 function getTitle() {
@@ -370,6 +439,7 @@ function renderDashboard() {
         ${metric("Urgencias", store.urgentRequests.length, "bell", "danger")}
         ${metric("FAQ visibles", store.faqs.filter((faq) => faq.visible).length, "help")}
       </section>
+      ${renderMobileEntryGrid(views.filter((item) => item.id !== "dashboard"))}
       <section class="panel">
         <div class="section-heading">
           <div>
@@ -448,7 +518,7 @@ function renderAppointment(item) {
 
 function renderPatientRow(pet) {
   return `
-    <button class="patient-row" data-pet="${pet.id}" data-view="patients">
+    <button class="patient-row" data-pet="${pet.id}" data-view="patients" data-open-patient>
       <span class="avatar">${pet.name.slice(0, 1)}</span>
       <span>
         <strong>${pet.name}</strong>
@@ -573,7 +643,7 @@ function renderTutorCalendar() {
 function renderPatients() {
   const selected = getPet(store.selectedPetId);
   return `
-    <div class="patient-layout">
+    <div class="patient-layout ${store.patientDetailOpen ? "show-detail" : ""}">
       <section class="panel patient-list">
         <div class="section-heading">
           <div>
@@ -584,6 +654,10 @@ function renderPatients() {
         ${store.pets.map(renderPatientRow).join("")}
       </section>
       <section class="panel patient-detail">
+        <button class="ghost-button mobile-back patient-back" data-patient-back>
+          <span class="icon">${icons.arrow}</span>
+          Pacientes
+        </button>
         <div class="patient-header">
           <span class="avatar large">${selected.name.slice(0, 1)}</span>
           <div>
@@ -815,6 +889,7 @@ function renderTutorHome() {
         ${metric("Documentos", pet.documents.length, "file")}
         ${metric("Etapas", pet.plan.length, "bowl")}
       </section>
+      ${renderMobileEntryGrid(tutorViews.filter((item) => item.id !== "tutor-home"))}
       <section class="panel">
         <div class="section-heading">
           <div>
@@ -837,6 +912,43 @@ function renderTutorHome() {
       </section>
     </div>
   `;
+}
+
+function renderMobileEntryGrid(list) {
+  return `
+    <section class="mobile-entry-grid">
+      ${list
+        .map(
+          (item) => `
+            <button class="mobile-entry" data-view="${item.id}">
+              <span class="icon">${icons[item.icon]}</span>
+              <span>
+                <strong>${item.label}</strong>
+                <small>${getMobileEntryText(item.id)}</small>
+              </span>
+            </button>
+          `
+        )
+        .join("")}
+    </section>
+  `;
+}
+
+function getMobileEntryText(id) {
+  const copy = {
+    calendar: "Disponibilidad y urgencias.",
+    patients: "Legajos y evolucion.",
+    plans: "Etapas del plan alimentario.",
+    library: "Alimentos y recetas.",
+    faq: "Preguntas frecuentes.",
+    settings: "Servicios conectados.",
+    "tutor-calendar": "Elegir un horario disponible.",
+    "tutor-pet": "Ficha y documentos de Mora.",
+    "tutor-plan": "Plan nutricional activo.",
+    "tutor-faq": "Respuestas rapidas.",
+    "tutor-urgent": "Enviar alerta a Melanie.",
+  };
+  return copy[id] || "Abrir seccion.";
 }
 
 function renderTutorPet() {
@@ -970,12 +1082,63 @@ function toDateInput(date) {
 }
 
 function bindEvents() {
+  document.querySelectorAll("[data-login-role]").forEach((button) => {
+    button.addEventListener("click", () => {
+      store.activeRole = button.dataset.loginRole;
+      render();
+    });
+  });
+
+  document.querySelectorAll("[data-login-form]").forEach((form) => {
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      store.isAuthenticated = true;
+      store.activeView = getHomeView();
+      store.patientDetailOpen = false;
+      render();
+    });
+  });
+
+  document.querySelectorAll("[data-logout]").forEach((button) => {
+    button.addEventListener("click", () => {
+      store.isAuthenticated = false;
+      store.activeView = getHomeView();
+      store.patientDetailOpen = false;
+      render();
+    });
+  });
+
+  document.querySelectorAll("[data-back-home]").forEach((button) => {
+    button.addEventListener("click", () => {
+      if (store.activeView === "patients" && store.patientDetailOpen) {
+        store.patientDetailOpen = false;
+      } else {
+        store.activeView = getHomeView();
+        store.patientDetailOpen = false;
+      }
+      render();
+    });
+  });
+
+  document.querySelectorAll("[data-patient-back]").forEach((button) => {
+    button.addEventListener("click", () => {
+      store.patientDetailOpen = false;
+      render();
+    });
+  });
+
   document.querySelectorAll("[data-view]").forEach((button) => {
     button.addEventListener("click", () => {
       if (button.dataset.pet) {
         store.selectedPetId = button.dataset.pet;
+        store.patientDetailOpen = true;
       }
       store.activeView = button.dataset.view;
+      if (store.activeView !== "patients") {
+        store.patientDetailOpen = false;
+      } else if (!button.dataset.pet) {
+        store.patientDetailOpen = false;
+      }
       render();
     });
   });
@@ -983,7 +1146,8 @@ function bindEvents() {
   document.querySelectorAll("[data-role]").forEach((button) => {
     button.addEventListener("click", () => {
       store.activeRole = button.dataset.role;
-      store.activeView = store.activeRole === "vet" ? "dashboard" : "tutor-home";
+      store.activeView = getHomeView();
+      store.patientDetailOpen = false;
       render();
     });
   });
