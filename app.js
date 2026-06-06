@@ -552,43 +552,40 @@ function renderTutorView() {
 
 function renderDashboard() {
   const selected = getPet(store.selectedPetId);
+  const activePlans = store.pets.filter((pet) => pet.plan.length > 0).length;
   return `
     <div class="dashboard-grid">
-      <section class="hero-panel">
+      ${renderDashboardTabs()}
+      <section class="hero-panel dashboard-hero">
         <img src="nutrivetm-hero.png" alt="Consultorio veterinario moderno con perro y gato" />
         <div class="hero-copy">
           <span class="eyebrow">${appConfig.appName}</span>
-          <h2>Nutricion veterinaria con legajo, agenda y seguimiento en un solo lugar.</h2>
-          <p>Preparada para Supabase, notificaciones push, email y futura sincronizacion con Google Calendar.</p>
+          <h2>Nutricion veterinaria, agenda y seguimiento en un solo panel.</h2>
+          <p>Gestiona pacientes, planes alimentarios, turnos y alertas clinicas desde una plataforma simple y profesional.</p>
         </div>
       </section>
       <section class="metrics">
-        ${metric("Pacientes activos", store.pets.length, "paw")}
+        ${metric("Pacientes en seguimiento", store.pets.length, "paw")}
         ${metric("Turnos proximos", store.appointments.length, "calendar")}
-        ${metric("Urgencias", store.urgentRequests.length, "bell", "danger")}
-        ${metric("FAQ visibles", store.faqs.filter((faq) => faq.visible).length, "help")}
+        ${metric("Alertas clinicas", store.urgentRequests.length, "bell", "danger")}
+        ${metric("Planes activos", activePlans, "bowl")}
       </section>
-      <section class="panel wide active-patient-panel">
+      <section class="panel wide active-patient-panel clinical-file-panel">
         <div class="section-heading">
           <div>
             <span class="eyebrow">Paciente activo</span>
-            <h2>${selected.name}</h2>
+            <h2>Ficha clinica de trabajo</h2>
           </div>
-          ${renderPatientSelect("dashboard-patient", selected.id)}
+          <button class="soft-button" data-view="patients">Abrir legajo</button>
         </div>
-        <div class="active-patient-summary">
-          ${detail("Tutor", selected.tutor)}
-          ${detail("Peso actual", `${selected.weight} kg`)}
-          ${detail("Objetivo", `${selected.targetWeight} kg`)}
-          ${detail("Estado", selected.status)}
-        </div>
+        ${renderDashboardPatientCard(selected)}
       </section>
       ${renderMobileEntryGrid(views.filter((item) => item.id !== "dashboard"))}
-      <section class="panel">
+      <section class="panel clinical-alert-panel">
         <div class="section-heading">
           <div>
-            <span class="eyebrow">Atencion prioritaria</span>
-            <h2>Solicitudes de urgencia</h2>
+            <span class="eyebrow">Alertas clinicas</span>
+            <h2>Atencion prioritaria</h2>
           </div>
           <button class="soft-button" data-view="calendar">Ver agenda</button>
         </div>
@@ -615,6 +612,58 @@ function renderDashboard() {
         ${renderPatientPreview(selected)}
       </section>
     </div>
+  `;
+}
+
+function renderDashboardTabs() {
+  const items = [
+    { label: "Pacientes", view: "patients", icon: "paw" },
+    { label: "Plan nutricional", view: "plans", icon: "bowl" },
+    { label: "Turnos", view: "calendar", icon: "calendar" },
+    { label: "Seguimiento", view: "patients", icon: "weight" },
+    { label: "Alertas", view: "dashboard", icon: "bell" },
+    { label: "Configuracion", view: "settings", icon: "settings" },
+  ];
+  return `
+    <nav class="dashboard-tabs" aria-label="Modulos del panel">
+      ${items
+        .map(
+          (item) => `
+            <button class="${item.view === "dashboard" ? "active" : ""}" data-view="${item.view}">
+              <span class="icon">${icons[item.icon]}</span>
+              <span>${item.label}</span>
+            </button>
+          `
+        )
+        .join("")}
+    </nav>
+  `;
+}
+
+function renderDashboardPatientCard(pet) {
+  const nextAppointment = getNextAppointmentForPet(pet.id);
+  return `
+    <article class="dashboard-patient-card">
+      <div class="patient-card-main">
+        <span class="avatar large">${pet.name.slice(0, 1)}</span>
+        <div>
+          <span class="badge ${pet.status.includes("Urgencia") ? "danger" : ""}">${pet.status}</span>
+          <h3>${pet.name}</h3>
+          <p>${pet.species} · ${pet.breed} · ${pet.age}</p>
+        </div>
+      </div>
+      <div class="clinical-facts">
+        ${detail("Tutor", pet.tutor)}
+        ${detail("Especie", pet.species)}
+        ${detail("Raza", pet.breed)}
+        ${detail("Edad", pet.age)}
+        ${detail("Peso actual", `${pet.weight} kg`)}
+        ${detail("Peso objetivo", `${pet.targetWeight} kg`)}
+        ${detail("Estado del plan", pet.status)}
+        ${detail("Ultimo control", getLastControlLabel(pet))}
+        ${detail("Proximo turno", nextAppointment ? `${formatDate(nextAppointment.date)} · ${nextAppointment.time}` : "Sin turno asignado")}
+      </div>
+    </article>
   `;
 }
 
@@ -1247,6 +1296,18 @@ function buildAppointmentSlots(startHour, endHour, intervalHours = 2) {
 
 function getAppointmentAt(date, slot) {
   return store.appointments.find((item) => item.date === date && item.time === slot);
+}
+
+function getNextAppointmentForPet(petId) {
+  return store.appointments
+    .filter((item) => item.petId === petId)
+    .slice()
+    .sort((a, b) => `${a.date}T${a.time}`.localeCompare(`${b.date}T${b.time}`))[0];
+}
+
+function getLastControlLabel(pet) {
+  const lastWeight = pet.weights[pet.weights.length - 1];
+  return lastWeight ? `Control ${pet.weights.length} · ${lastWeight} kg` : "Pendiente";
 }
 
 function getAvailableSlots(date) {
