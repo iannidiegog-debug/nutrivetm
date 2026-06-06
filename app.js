@@ -198,7 +198,7 @@ const views = [
   { id: "settings", label: "Configuracion", icon: "settings" },
 ];
 
-const appointmentSlots = ["09:00", "09:30", "10:00", "10:30", "11:00", "15:30", "16:00", "16:30", "17:00"];
+const appointmentSlots = buildAppointmentSlots(9, 19);
 
 const tutorViews = [
   { id: "tutor-home", label: "Inicio", icon: "home" },
@@ -317,6 +317,7 @@ function renderLogin() {
 function renderAccountHome() {
   const list = getHomeModules();
   const isVet = store.activeRole === "vet";
+  const selected = getPet(store.selectedPetId);
   return `
     <main class="home-shell ${store.activeRole === "tutor" ? "tutor-mode" : ""}">
       <section class="profile-top">
@@ -333,6 +334,14 @@ function renderAccountHome() {
           <p>${isVet ? "Elegir un modulo para gestionar agenda, pacientes, planes y consultas." : "Elegir un modulo para ver turnos, ficha, plan y consultas."}</p>
         </div>
         <div class="account-actions">
+          ${
+            isVet
+              ? `<label class="active-patient-control home-patient-control">
+                  <span>Paciente activo</span>
+                  ${renderPatientSelect("home-patient", selected.id)}
+                </label>`
+              : ""
+          }
           <button class="ghost-button" data-view="settings">
             <span class="icon">${icons.settings}</span>
             Configuracion
@@ -374,6 +383,7 @@ function renderModuleCard(item) {
 }
 
 function renderFlowHeader() {
+  const selected = getPet(store.selectedPetId);
   return `
     <header class="flow-header">
       <button class="ghost-button" data-back-home>
@@ -384,8 +394,30 @@ function renderFlowHeader() {
         <span class="eyebrow">${store.activeView === "settings" ? "Configuracion" : appConfig.appName}</span>
         <h1>${getTitle()}</h1>
       </div>
-      <button class="soft-button" data-logout>Cerrar sesion</button>
+      <div class="flow-actions">
+        ${
+          store.activeRole === "vet"
+            ? `<label class="active-patient-control">
+                <span>Paciente activo</span>
+                ${renderPatientSelect("active-patient", selected.id)}
+              </label>`
+            : ""
+        }
+        <button class="soft-button" data-logout>Cerrar sesion</button>
+      </div>
     </header>
+  `;
+}
+
+function renderPatientSelect(name, value = store.selectedPetId) {
+  return `
+    <span class="select-wrap compact-select">
+      <select name="${name}" data-active-patient>
+        ${store.pets
+          .map((pet) => `<option value="${pet.id}" ${pet.id === value ? "selected" : ""}>${pet.name} · ${pet.tutor}</option>`)
+          .join("")}
+      </select>
+    </span>
   `;
 }
 
@@ -499,6 +531,7 @@ function renderTutorView() {
 }
 
 function renderDashboard() {
+  const selected = getPet(store.selectedPetId);
   return `
     <div class="dashboard-grid">
       <section class="hero-panel">
@@ -514,6 +547,21 @@ function renderDashboard() {
         ${metric("Turnos proximos", store.appointments.length, "calendar")}
         ${metric("Urgencias", store.urgentRequests.length, "bell", "danger")}
         ${metric("FAQ visibles", store.faqs.filter((faq) => faq.visible).length, "help")}
+      </section>
+      <section class="panel wide active-patient-panel">
+        <div class="section-heading">
+          <div>
+            <span class="eyebrow">Paciente activo</span>
+            <h2>${selected.name}</h2>
+          </div>
+          ${renderPatientSelect("dashboard-patient", selected.id)}
+        </div>
+        <div class="active-patient-summary">
+          ${detail("Tutor", selected.tutor)}
+          ${detail("Peso actual", `${selected.weight} kg`)}
+          ${detail("Objetivo", `${selected.targetWeight} kg`)}
+          ${detail("Estado", selected.status)}
+        </div>
       </section>
       ${renderMobileEntryGrid(views.filter((item) => item.id !== "dashboard"))}
       <section class="panel">
@@ -540,13 +588,27 @@ function renderDashboard() {
         <div class="section-heading">
           <div>
             <span class="eyebrow">Seguimiento</span>
-            <h2>Pacientes para revisar</h2>
+            <h2>Legajo seleccionado</h2>
           </div>
-          <button class="primary-button" data-view="plans">Armar plan</button>
+          <button class="primary-button" data-view="patients">Abrir legajo</button>
         </div>
-        <div class="patient-row-list">${store.pets.map(renderPatientRow).join("")}</div>
+        ${renderPatientPreview(selected)}
       </section>
     </div>
+  `;
+}
+
+function renderPatientPreview(pet) {
+  return `
+    <article class="patient-preview">
+      <span class="avatar large">${pet.name.slice(0, 1)}</span>
+      <div>
+        <span class="badge ${pet.status.includes("Urgencia") ? "danger" : ""}">${pet.status}</span>
+        <h3>${pet.name} · ${pet.species}</h3>
+        <p>${pet.breed} · ${pet.age} · ${pet.tutor}</p>
+      </div>
+      <button class="soft-button" data-view="plans">Ver plan</button>
+    </article>
   `;
 }
 
@@ -607,6 +669,7 @@ function renderPatientRow(pet) {
 }
 
 function renderCalendar() {
+  const weekDays = getWeekDays(today);
   return `
     <div class="content-grid">
       <section class="panel wide">
@@ -618,9 +681,8 @@ function renderCalendar() {
           <button class="primary-button" data-add-appointment>Nuevo turno</button>
         </div>
         <div class="calendar-board">
-          ${[0, 1, 2, 3, 4]
-            .map((offset) => {
-              const day = addDays(today, offset);
+          ${weekDays
+            .map((day) => {
               return `
                 <article class="day-column">
                   <h3>${day.toLocaleDateString("es-AR", { weekday: "short", day: "2-digit", month: "2-digit" })}</h3>
@@ -660,6 +722,7 @@ function renderCalendar() {
 function renderTutorCalendar() {
   const pet = getPet("mora");
   const petAppointments = store.appointments.filter((item) => item.petId === pet.id);
+  const weekDays = getWeekDays(today);
   return `
     <div class="content-grid">
       <section class="panel wide">
@@ -672,9 +735,8 @@ function renderTutorCalendar() {
         </div>
         <p class="muted">Elegi un horario libre para solicitar turno. La veterinaria lo vera como pendiente y podra confirmarlo desde su agenda.</p>
         <div class="calendar-board tutor-calendar">
-          ${[0, 1, 2, 3, 4]
-            .map((offset) => {
-              const day = addDays(today, offset);
+          ${weekDays
+            .map((day) => {
               const date = toDateInput(day);
               return `
                 <article class="day-column">
@@ -719,21 +781,32 @@ function renderTutorCalendar() {
 function renderPatients() {
   const selected = getPet(store.selectedPetId);
   return `
-    <div class="patient-layout ${store.patientDetailOpen ? "show-detail" : ""}">
-      <section class="panel patient-list">
+    <div class="patient-layout patient-select-layout">
+      <section class="panel patient-picker-panel">
         <div class="section-heading">
           <div>
             <span class="eyebrow">Legajos</span>
-            <h2>Pacientes</h2>
+            <h2>Seleccionar paciente</h2>
           </div>
         </div>
-        ${store.pets.map(renderPatientRow).join("")}
+        ${renderPatientSelect("patients-patient", selected.id)}
+        <div class="patient-picker-summary">
+          ${store.pets
+            .map(
+              (pet) => `
+                <button class="mini-patient ${pet.id === selected.id ? "active" : ""}" data-pet="${pet.id}" data-view="patients">
+                  <span class="avatar">${pet.name.slice(0, 1)}</span>
+                  <span>
+                    <strong>${pet.name}</strong>
+                    <small>${pet.status}</small>
+                  </span>
+                </button>
+              `
+            )
+            .join("")}
+        </div>
       </section>
       <section class="panel patient-detail">
-        <button class="ghost-button mobile-back patient-back" data-patient-back>
-          <span class="icon">${icons.arrow}</span>
-          Pacientes
-        </button>
         <div class="patient-header">
           <span class="avatar large">${selected.name.slice(0, 1)}</span>
           <div>
@@ -814,7 +887,10 @@ function renderPlans() {
             <span class="eyebrow">Plan a dos meses</span>
             <h2>${selected.name}</h2>
           </div>
-          <button class="primary-button" data-add-stage>Agregar etapa</button>
+          <div class="section-actions">
+            ${renderPatientSelect("plans-patient", selected.id)}
+            <button class="primary-button" data-add-stage>Agregar etapa</button>
+          </div>
         </div>
         <div class="timeline">
           ${
@@ -1140,6 +1216,17 @@ function getPet(id) {
   return store.pets.find((pet) => pet.id === id) || store.pets[0];
 }
 
+function buildAppointmentSlots(startHour, endHour) {
+  const slots = [];
+  for (let hour = startHour; hour <= endHour; hour += 1) {
+    slots.push(`${String(hour).padStart(2, "0")}:00`);
+    if (hour < endHour) {
+      slots.push(`${String(hour).padStart(2, "0")}:30`);
+    }
+  }
+  return slots;
+}
+
 function formatDate(date) {
   return new Date(`${date}T12:00:00-03:00`).toLocaleDateString("es-AR", {
     weekday: "short",
@@ -1154,11 +1241,29 @@ function addDays(date, days) {
   return copy;
 }
 
+function getWeekDays(date) {
+  const start = new Date(date);
+  const day = start.getDay();
+  const diffToMonday = day === 0 ? -6 : 1 - day;
+  start.setDate(start.getDate() + diffToMonday);
+  return Array.from({ length: 7 }, (_, index) => addDays(start, index));
+}
+
 function toDateInput(date) {
   return date.toISOString().slice(0, 10);
 }
 
 function bindEvents() {
+  document.querySelectorAll("[data-active-patient]").forEach((select) => {
+    select.addEventListener("change", () => {
+      store.selectedPetId = select.value;
+      if (store.activeView === "patients") {
+        store.patientDetailOpen = true;
+      }
+      render();
+    });
+  });
+
   document.querySelectorAll("[data-login-role-select]").forEach((select) => {
     select.addEventListener("change", () => {
       store.activeRole = select.value;
@@ -1189,12 +1294,8 @@ function bindEvents() {
 
   document.querySelectorAll("[data-back-home]").forEach((button) => {
     button.addEventListener("click", () => {
-      if (store.activeView === "patients" && store.patientDetailOpen) {
-        store.patientDetailOpen = false;
-      } else {
-        store.activeView = getHomeView();
-        store.patientDetailOpen = false;
-      }
+      store.activeView = getHomeView();
+      store.patientDetailOpen = false;
       render();
     });
   });
