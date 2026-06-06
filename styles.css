@@ -1173,19 +1173,95 @@ label,
   background: var(--surface-soft);
 }
 
-.schema-list {
+.toggle-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 42px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #fff;
+  color: var(--ink);
+  font-weight: 800;
+}
+
+.toggle-line input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--green);
+}
+
+.checkbox-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.plan-workspace,
+.followup-workspace {
+  align-items: start;
+}
+
+.plan-facts {
+  margin-bottom: 16px;
+}
+
+.plan-summary-card,
+.stage-card,
+.followup-card,
+.history-item,
+.tutor-plan-preview {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #fff;
+}
+
+.plan-summary-card {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  margin-bottom: 16px;
+  background: var(--surface-soft);
+}
+
+.stage-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.stage-card-top,
+.history-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.stage-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  padding-top: 4px;
 }
 
-.schema-list span {
-  padding: 7px 10px;
-  border-radius: 999px;
-  background: #fff;
-  color: var(--green-deep);
-  font-size: 12px;
-  font-weight: 800;
+.history-list {
+  display: grid;
+  gap: 12px;
+}
+
+.followup-card {
+  background: var(--surface-soft);
+}
+
+.tutor-plan-preview p,
+.stage-card p,
+.followup-card p,
+.history-item p {
+  margin: 0;
 }
 
 .form-actions {
@@ -1640,6 +1716,8 @@ textarea {
   .detail-grid,
   .tabs,
   .form-grid,
+  .checkbox-grid,
+  .stage-grid,
   .food-grid,
   .integration-grid,
   .faq-list,
@@ -1665,6 +1743,25 @@ textarea {
   .patient-preview .soft-button {
     grid-column: 1 / -1;
     width: 100%;
+  }
+
+  .plan-summary-card,
+  .stage-card-top,
+  .history-item {
+    grid-template-columns: 1fr;
+    display: grid;
+  }
+
+  .stage-actions,
+  .form-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .stage-actions button,
+  .form-actions button,
+  .toggle-line {
+    min-height: 46px;
   }
 
   .form-actions {
