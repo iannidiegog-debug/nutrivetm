@@ -535,6 +535,21 @@ label,
   border-color: #b6d5c2;
 }
 
+.slot.available {
+  border-color: #a8c9b0;
+  background: #fbfffc;
+}
+
+.slot.mine {
+  border-color: #efc78d;
+  background: #fff7e8;
+}
+
+.slot:disabled {
+  cursor: not-allowed;
+  transform: none;
+}
+
 .patient-layout {
   display: grid;
   grid-template-columns: 360px minmax(0, 1fr);
