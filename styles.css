@@ -363,6 +363,33 @@ label,
   border-bottom: 1px solid var(--line);
 }
 
+.flow-actions,
+.section-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.active-patient-control {
+  display: grid;
+  gap: 6px;
+  min-width: 240px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.home-patient-control {
+  min-width: 260px;
+}
+
+.compact-select select {
+  min-height: 42px;
+  padding: 9px 38px 9px 12px;
+}
+
 .flow-content {
   min-width: 0;
 }
@@ -704,6 +731,10 @@ label,
   margin-bottom: 16px;
 }
 
+.section-heading .select-wrap {
+  min-width: min(320px, 100%);
+}
+
 .stack {
   display: grid;
   gap: 12px;
@@ -750,6 +781,53 @@ label,
 .patient-list {
   display: grid;
   gap: 10px;
+}
+
+.active-patient-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.patient-preview {
+  display: grid;
+  grid-template-columns: 68px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-soft);
+}
+
+.patient-picker-panel {
+  align-self: start;
+}
+
+.patient-picker-summary {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.mini-patient {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 62px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #fff;
+  color: var(--ink);
+  text-align: left;
+}
+
+.mini-patient.active {
+  border-color: #9fc8ac;
+  background: var(--green-soft);
 }
 
 .patient-row {
@@ -799,7 +877,7 @@ label,
 
 .calendar-board {
   display: grid;
-  grid-template-columns: repeat(5, minmax(160px, 1fr));
+  grid-template-columns: repeat(7, minmax(150px, 1fr));
   gap: 12px;
   overflow-x: auto;
   padding-bottom: 4px;
@@ -1134,6 +1212,11 @@ textarea {
     width: 100%;
   }
 
+  .home-patient-control {
+    grid-column: 1 / -1;
+    min-width: 0;
+  }
+
   .account-actions button {
     width: 100%;
   }
@@ -1161,6 +1244,18 @@ textarea {
   .flow-header {
     grid-template-columns: 1fr;
     align-items: start;
+  }
+
+  .flow-actions,
+  .section-actions {
+    justify-content: flex-start;
+    width: 100%;
+  }
+
+  .active-patient-control,
+  .section-actions .select-wrap {
+    min-width: 0;
+    width: 100%;
   }
 
   .flow-header .soft-button {
@@ -1261,8 +1356,18 @@ textarea {
   .tabs,
   .food-grid,
   .integration-grid,
-  .faq-list {
+  .faq-list,
+  .active-patient-summary {
     grid-template-columns: 1fr;
+  }
+
+  .patient-preview {
+    grid-template-columns: 58px minmax(0, 1fr);
+  }
+
+  .patient-preview .soft-button {
+    grid-column: 1 / -1;
+    width: 100%;
   }
 
   .patient-row {
@@ -1277,6 +1382,10 @@ textarea {
 
   .patient-layout .patient-detail {
     display: none;
+  }
+
+  .patient-select-layout .patient-detail {
+    display: block;
   }
 
   .patient-layout.show-detail .patient-list {
