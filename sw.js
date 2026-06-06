@@ -1,4 +1,4 @@
-const CACHE_NAME = "nutrivetm-v6";
+const CACHE_NAME = "nutrivetm-v7";
 const firebaseConfig = {
   apiKey: "AIzaSyDvDCK0keMuHMh9tBZMXFFpUP38iFGV8xI",
   authDomain: "nutrivetm-d73a7.firebaseapp.com",
