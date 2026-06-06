@@ -44,13 +44,24 @@ button {
   cursor: pointer;
 }
 
-input {
+input,
+select,
+textarea {
   width: 100%;
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: #fff;
   color: var(--ink);
   padding: 12px;
+}
+
+select {
+  appearance: none;
+  min-height: 48px;
+}
+
+textarea {
+  resize: vertical;
 }
 
 h1,
@@ -146,6 +157,8 @@ label,
   align-content: center;
   gap: 22px;
   padding: 44px;
+  max-width: 520px;
+  width: 100%;
 }
 
 .login-role-grid {
@@ -185,6 +198,173 @@ label,
 .login-form {
   display: grid;
   gap: 14px;
+}
+
+.select-wrap {
+  position: relative;
+  display: block;
+}
+
+.select-wrap::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: 14px;
+  width: 9px;
+  height: 9px;
+  border-right: 2px solid var(--green-deep);
+  border-bottom: 2px solid var(--green-deep);
+  pointer-events: none;
+  transform: translateY(-70%) rotate(45deg);
+}
+
+.select-wrap select {
+  padding-right: 42px;
+  background: linear-gradient(180deg, #fff, #f9fbf7);
+  font-weight: 800;
+}
+
+.home-shell {
+  min-height: 100vh;
+  padding: clamp(18px, 4vw, 48px);
+  background:
+    linear-gradient(180deg, rgba(221, 239, 229, 0.64), rgba(250, 250, 247, 0.92)),
+    var(--bg);
+}
+
+.profile-top {
+  display: grid;
+  grid-template-columns: minmax(190px, 260px) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 24px;
+  width: min(1180px, 100%);
+  margin: 0 auto 24px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: var(--shadow);
+}
+
+.compact-brand {
+  align-self: stretch;
+  padding: 10px;
+  border-radius: var(--radius);
+  background: var(--surface-soft);
+}
+
+.profile-summary {
+  display: grid;
+  gap: 6px;
+}
+
+.profile-summary p {
+  max-width: 620px;
+}
+
+.account-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.module-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  width: min(1180px, 100%);
+  margin: 0 auto;
+}
+
+.module-card {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  align-items: center;
+  gap: 14px;
+  min-height: 132px;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--ink);
+  text-align: left;
+  box-shadow: 0 12px 34px rgba(37, 54, 45, 0.08);
+  transition:
+    transform 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.module-card:hover {
+  transform: translateY(-2px);
+  border-color: #9fc8ac;
+  box-shadow: 0 18px 42px rgba(37, 54, 45, 0.13);
+}
+
+.module-card .icon {
+  width: 52px;
+  height: 52px;
+  border-radius: var(--radius);
+  background: var(--green-soft);
+  color: var(--green-deep);
+}
+
+.module-card .icon svg {
+  width: 24px;
+  height: 24px;
+}
+
+.module-card strong {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 18px;
+}
+
+.flow-shell {
+  position: relative;
+  min-height: 100vh;
+  padding: clamp(14px, 3vw, 34px);
+  overflow: hidden;
+  background: var(--bg);
+}
+
+.flow-backdrop {
+  position: fixed;
+  inset: 0;
+  opacity: 0.42;
+  filter: blur(9px);
+  transform: scale(1.02);
+  pointer-events: none;
+}
+
+.flow-sheet {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 18px;
+  width: min(1180px, 100%);
+  min-height: calc(100vh - clamp(28px, 6vw, 68px));
+  margin: 0 auto;
+  padding: clamp(16px, 3vw, 26px);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 24px 70px rgba(37, 54, 45, 0.18);
+}
+
+.flow-header {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.flow-content {
+  min-width: 0;
 }
 
 .sidebar {
@@ -880,6 +1060,18 @@ textarea {
     grid-template-columns: 1fr;
   }
 
+  .profile-top {
+    grid-template-columns: 1fr;
+  }
+
+  .account-actions {
+    justify-content: flex-start;
+  }
+
+  .module-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .patient-list {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
@@ -915,10 +1107,68 @@ textarea {
   .login-panel {
     align-content: start;
     padding: 22px 16px 28px;
+    max-width: none;
   }
 
   .login-role-grid {
     grid-template-columns: 1fr;
+  }
+
+  .home-shell {
+    padding: 14px;
+  }
+
+  .profile-top {
+    gap: 14px;
+    margin-bottom: 14px;
+    padding: 14px;
+  }
+
+  .compact-brand {
+    min-height: 66px;
+  }
+
+  .account-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    width: 100%;
+  }
+
+  .account-actions button {
+    width: 100%;
+  }
+
+  .module-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .module-card {
+    min-height: 92px;
+    padding: 14px;
+  }
+
+  .flow-shell {
+    padding: 10px;
+    overflow: visible;
+  }
+
+  .flow-sheet {
+    min-height: calc(100vh - 20px);
+    padding: 14px;
+  }
+
+  .flow-header {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+
+  .flow-header .soft-button {
+    justify-self: start;
+  }
+
+  .flow-sheet .mobile-entry-grid {
+    display: none;
   }
 
   .shell {
@@ -996,6 +1246,10 @@ textarea {
 
   .dashboard-grid > .panel {
     display: none;
+  }
+
+  .flow-sheet .dashboard-grid > .panel {
+    display: block;
   }
 
   .dashboard-grid > .metrics {
