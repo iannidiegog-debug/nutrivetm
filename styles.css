@@ -927,6 +927,93 @@ label,
   transform: none;
 }
 
+.agenda-compact {
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 0.34fr);
+}
+
+.agenda-picker {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.7fr) minmax(220px, 1fr);
+  align-items: end;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.agenda-select {
+  display: grid;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.agenda-day-card {
+  display: grid;
+  gap: 4px;
+  min-height: 76px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-soft);
+}
+
+.agenda-day-card h3 {
+  text-transform: capitalize;
+}
+
+.slot-list,
+.slot-actions {
+  display: grid;
+  gap: 10px;
+}
+
+.slot-list {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.slot-row {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 78px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #fff;
+  color: var(--ink);
+  text-align: left;
+}
+
+.slot-row.available {
+  border-color: #b6d5c2;
+  background: #fbfffc;
+}
+
+.slot-row.busy {
+  background: var(--green-soft);
+}
+
+.slot-chip {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  min-height: 62px;
+  padding: 12px 14px;
+  border: 1px solid #b6d5c2;
+  border-radius: var(--radius);
+  background: #fbfffc;
+  color: var(--ink);
+  text-align: left;
+}
+
+.slot-chip span {
+  color: var(--green-deep);
+  font-size: 20px;
+  font-weight: 900;
+}
+
 .patient-layout {
   display: grid;
   grid-template-columns: 360px minmax(0, 1fr);
@@ -1135,6 +1222,11 @@ textarea {
   .dashboard-grid,
   .content-grid,
   .patient-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .agenda-compact,
+  .agenda-picker {
     grid-template-columns: 1fr;
   }
 
@@ -1357,8 +1449,18 @@ textarea {
   .food-grid,
   .integration-grid,
   .faq-list,
-  .active-patient-summary {
+  .active-patient-summary,
+  .slot-list {
     grid-template-columns: 1fr;
+  }
+
+  .slot-row {
+    grid-template-columns: 58px minmax(0, 1fr);
+  }
+
+  .slot-row .badge {
+    grid-column: 1 / -1;
+    justify-self: start;
   }
 
   .patient-preview {
