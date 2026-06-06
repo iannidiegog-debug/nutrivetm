@@ -1,4 +1,4 @@
-const CACHE_NAME = "nutrivetm-v8";
+const CACHE_NAME = "nutrivetm-v9";
 const firebaseConfig = {
   apiKey: "AIzaSyDvDCK0keMuHMh9tBZMXFFpUP38iFGV8xI",
   authDomain: "nutrivetm-d73a7.firebaseapp.com",
@@ -56,5 +56,26 @@ self.addEventListener("activate", (event) => {
 
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
+  const requestUrl = new URL(event.request.url);
+  const isAppShell =
+    event.request.mode === "navigate" ||
+    requestUrl.pathname.endsWith("/index.html") ||
+    requestUrl.pathname.endsWith("/app.js") ||
+    requestUrl.pathname.endsWith("/styles.css") ||
+    requestUrl.pathname.endsWith("/sw.js");
+
+  if (isAppShell) {
+    event.respondWith(
+      fetch(event.request)
+        .then((response) => {
+          const copy = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+          return response;
+        })
+        .catch(() => caches.match(event.request).then((cached) => cached || caches.match("index.html")))
+    );
+    return;
+  }
+
   event.respondWith(caches.match(event.request).then((cached) => cached || fetch(event.request)));
 });
