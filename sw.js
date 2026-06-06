@@ -1,4 +1,4 @@
-const CACHE_NAME = "nutrivetm-v9";
+const CACHE_NAME = "nutrivetm-v10";
 const firebaseConfig = {
   apiKey: "AIzaSyDvDCK0keMuHMh9tBZMXFFpUP38iFGV8xI",
   authDomain: "nutrivetm-d73a7.firebaseapp.com",
@@ -14,8 +14,8 @@ const APP_ASSETS = [
   "app.js",
   "manifest.webmanifest",
   "nutrivetm-hero.png",
-  "assets/icon-192.svg",
-  "assets/icon-512.svg",
+  "icon-192.svg",
+  "icon-512.svg",
 ];
 
 try {
@@ -29,8 +29,8 @@ try {
     const title = payload.notification?.title || "NutriVetM";
     const options = {
       body: payload.notification?.body || "Tenes una nueva alerta.",
-      icon: "assets/icon-192.svg",
-      badge: "assets/icon-192.svg",
+      icon: "icon-192.svg",
+      badge: "icon-192.svg",
       data: payload.data || {},
     };
 
