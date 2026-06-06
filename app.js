@@ -1,6 +1,7 @@
 import { appConfig } from "./config.js";
 
 const today = new Date("2026-06-05T12:00:00-03:00");
+const STORAGE_KEY = "nutrivetm-data-v1";
 
 const store = {
   isAuthenticated: false,
@@ -8,7 +9,43 @@ const store = {
   activeView: "home",
   selectedPetId: "mora",
   activeCalendarDate: "2026-06-06",
+  patientMode: "detail",
   patientDetailOpen: false,
+  navigationHistory: [],
+  tutors: [
+    {
+      id: "tutor-agustin",
+      firstName: "Agustin",
+      lastName: "Perez",
+      dni: "Pendiente",
+      email: "Pendiente",
+      phone: "Pendiente",
+      address: "Pendiente",
+      createdAt: "2026-06-05",
+    },
+    {
+      id: "tutor-marina",
+      firstName: "Marina",
+      lastName: "Vidal",
+      dni: "Pendiente",
+      email: "Pendiente",
+      phone: "Pendiente",
+      address: "Pendiente",
+      createdAt: "2026-06-05",
+    },
+    {
+      id: "tutor-rocio",
+      firstName: "Rocio",
+      lastName: "Navas",
+      dni: "Pendiente",
+      email: "Pendiente",
+      phone: "Pendiente",
+      address: "Pendiente",
+      createdAt: "2026-06-05",
+    },
+  ],
+  nutritionPlans: [],
+  consultations: [],
   faqs: [
     {
       id: "faq-1",
@@ -82,6 +119,7 @@ const store = {
       weight: 18.4,
       targetWeight: 17.8,
       bodyScore: "5/9",
+      tutorId: "tutor-agustin",
       tutor: "Agustin Perez",
       phone: "Pendiente",
       email: "Pendiente",
@@ -127,6 +165,7 @@ const store = {
       weight: 4.8,
       targetWeight: 4.5,
       bodyScore: "6/9",
+      tutorId: "tutor-marina",
       tutor: "Marina Vidal",
       phone: "Pendiente",
       email: "Pendiente",
@@ -148,6 +187,7 @@ const store = {
       weight: 23.1,
       targetWeight: 22.5,
       bodyScore: "5/9",
+      tutorId: "tutor-rocio",
       tutor: "Rocio Navas",
       phone: "Pendiente",
       email: "Pendiente",
@@ -512,6 +552,8 @@ function getTitle() {
     calendar: "Agenda interna",
     patients: "Pacientes",
     plans: "Planes alimentarios",
+    followup: "Seguimiento",
+    alerts: "Alertas clinicas",
     library: "Biblioteca BARF",
     faq: "Preguntas frecuentes",
     settings: "Configuracion",
@@ -531,6 +573,8 @@ function renderVetView() {
     calendar: renderCalendar,
     patients: renderPatients,
     plans: renderPlans,
+    followup: renderFollowUp,
+    alerts: renderAlerts,
     library: renderLibrary,
     faq: renderFaq,
     settings: renderSettings,
@@ -551,7 +595,6 @@ function renderTutorView() {
 }
 
 function renderDashboard() {
-  const selected = getPet(store.selectedPetId);
   const activePlans = store.pets.filter((pet) => pet.plan.length > 0).length;
   return `
     <div class="dashboard-grid">
@@ -565,20 +608,10 @@ function renderDashboard() {
         </div>
       </section>
       <section class="metrics">
-        ${metric("Pacientes en seguimiento", store.pets.length, "paw")}
-        ${metric("Turnos proximos", store.appointments.length, "calendar")}
-        ${metric("Alertas clinicas", store.urgentRequests.length, "bell", "danger")}
-        ${metric("Planes activos", activePlans, "bowl")}
-      </section>
-      <section class="panel wide active-patient-panel clinical-file-panel">
-        <div class="section-heading">
-          <div>
-            <span class="eyebrow">Paciente activo</span>
-            <h2>Ficha clinica de trabajo</h2>
-          </div>
-          <button class="soft-button" data-view="patients">Abrir legajo</button>
-        </div>
-        ${renderDashboardPatientCard(selected)}
+        ${metric("Pacientes en seguimiento", store.pets.length, "paw", "", "patients")}
+        ${metric("Turnos proximos", store.appointments.length, "calendar", "", "calendar")}
+        ${metric("Alertas clinicas", store.urgentRequests.length, "bell", "danger", "alerts")}
+        ${metric("Planes activos", activePlans, "bowl", "", "plans")}
       </section>
       ${renderMobileEntryGrid(views.filter((item) => item.id !== "dashboard"))}
       <section class="panel clinical-alert-panel">
@@ -587,7 +620,7 @@ function renderDashboard() {
             <span class="eyebrow">Alertas clinicas</span>
             <h2>Atencion prioritaria</h2>
           </div>
-          <button class="soft-button" data-view="calendar">Ver agenda</button>
+          <button class="soft-button" data-view="alerts">Ver alertas</button>
         </div>
         <div class="stack">${store.urgentRequests.map(renderUrgency).join("")}</div>
       </section>
@@ -601,16 +634,6 @@ function renderDashboard() {
         </div>
         <div class="stack">${store.appointments.map(renderAppointment).join("")}</div>
       </section>
-      <section class="panel wide">
-        <div class="section-heading">
-          <div>
-            <span class="eyebrow">Seguimiento</span>
-            <h2>Legajo seleccionado</h2>
-          </div>
-          <button class="primary-button" data-view="patients">Abrir legajo</button>
-        </div>
-        ${renderPatientPreview(selected)}
-      </section>
     </div>
   `;
 }
@@ -620,8 +643,8 @@ function renderDashboardTabs() {
     { label: "Pacientes", view: "patients", icon: "paw" },
     { label: "Plan nutricional", view: "plans", icon: "bowl" },
     { label: "Turnos", view: "calendar", icon: "calendar" },
-    { label: "Seguimiento", view: "patients", icon: "weight" },
-    { label: "Alertas", view: "dashboard", icon: "bell" },
+    { label: "Seguimiento", view: "followup", icon: "weight" },
+    { label: "Alertas", view: "alerts", icon: "bell" },
     { label: "Configuracion", view: "settings", icon: "settings" },
   ];
   return `
@@ -681,13 +704,13 @@ function renderPatientPreview(pet) {
   `;
 }
 
-function metric(label, value, icon, tone = "") {
+function metric(label, value, icon, tone = "", view = "") {
   return `
-    <article class="metric ${tone}">
+    <button class="metric ${tone} metric-link" ${view ? `data-view="${view}"` : ""}>
       <span class="icon">${icons[icon]}</span>
       <strong>${value}</strong>
       <span>${label}</span>
-    </article>
+    </button>
   `;
 }
 
@@ -850,30 +873,22 @@ function renderTutorCalendar() {
 
 function renderPatients() {
   const selected = getPet(store.selectedPetId);
+  if (store.patientMode === "new") {
+    return renderNewPatientForm();
+  }
   return `
     <div class="patient-layout patient-select-layout">
       <section class="panel patient-picker-panel">
         <div class="section-heading">
           <div>
-            <span class="eyebrow">Legajos</span>
+            <span class="eyebrow">Legajo</span>
             <h2>Seleccionar paciente</h2>
           </div>
         </div>
         ${renderPatientSelect("patients-patient", selected.id)}
-        <div class="patient-picker-summary">
-          ${store.pets
-            .map(
-              (pet) => `
-                <button class="mini-patient ${pet.id === selected.id ? "active" : ""}" data-pet="${pet.id}" data-view="patients">
-                  <span class="avatar">${pet.name.slice(0, 1)}</span>
-                  <span>
-                    <strong>${pet.name}</strong>
-                    <small>${pet.status}</small>
-                  </span>
-                </button>
-              `
-            )
-            .join("")}
+        <div class="patient-picker-actions">
+          <button class="primary-button" data-patient-mode="new">+ Nuevo paciente</button>
+          <p class="muted">El desplegable permite cambiar de legajo sin duplicar el listado en pantalla.</p>
         </div>
       </section>
       <section class="panel patient-detail">
@@ -910,6 +925,99 @@ function renderPatients() {
         ${renderWeightChart(selected)}
       </section>
     </div>
+  `;
+}
+
+function renderNewPatientForm() {
+  return `
+    <form class="panel wide patient-form" data-new-patient-form>
+      <div class="section-heading">
+        <div>
+          <span class="eyebrow">Alta de paciente</span>
+          <h2>Nuevo paciente veterinario</h2>
+        </div>
+        <button class="ghost-button" type="button" data-patient-mode="detail">
+          <span class="icon">${icons.arrow}</span>
+          Volver
+        </button>
+      </div>
+      <div class="form-grid">
+        <section class="form-section">
+          <h3>Datos del paciente/animal</h3>
+          <label>Nombre del animal<input name="petName" required /></label>
+          <label>Especie
+            <select name="species" required>
+              <option value="">Seleccionar</option>
+              <option>Perro</option>
+              <option>Gato</option>
+              <option>Otro</option>
+            </select>
+          </label>
+          <label>Raza<input name="breed" /></label>
+          <label>Sexo<input name="sex" placeholder="Macho / Hembra" /></label>
+          <label>Edad<input name="age" placeholder="Ej. 4 anos" /></label>
+          <label>Fecha de nacimiento aproximada<input name="birthDate" type="date" /></label>
+          <label>Peso actual<input name="weight" type="number" step="0.1" required /></label>
+          <label>Peso objetivo<input name="targetWeight" type="number" step="0.1" /></label>
+          <label>Condicion corporal<input name="bodyScore" placeholder="Ej. 5/9" /></label>
+          <label>Estado reproductivo<input name="reproductiveStatus" placeholder="Entero / Castrado" /></label>
+          <label>Nivel de actividad<input name="activityLevel" /></label>
+          <label>Patologias conocidas<textarea name="pathologies" rows="3"></textarea></label>
+          <label>Alergias o intolerancias<textarea name="allergies" rows="3"></textarea></label>
+          <label>Medicacion actual<textarea name="medication" rows="3"></textarea></label>
+          <label>Observaciones generales<textarea name="notes" rows="3"></textarea></label>
+        </section>
+        <section class="form-section">
+          <h3>Datos nutricionales</h3>
+          <label>Tipo de alimentacion actual<input name="currentFoodType" /></label>
+          <label>Marca o alimento actual<input name="currentFoodBrand" /></label>
+          <label>Cantidad diaria aproximada<input name="dailyAmount" /></label>
+          <label>Frecuencia de comidas<input name="mealFrequency" /></label>
+          <label>Premios/snacks<textarea name="snacks" rows="3"></textarea></label>
+          <label>Alimentos prohibidos o restringidos<textarea name="restrictedFoods" rows="3"></textarea></label>
+          <label>Objetivo nutricional
+            <select name="nutritionGoal">
+              <option>Mantenimiento</option>
+              <option>Descenso de peso</option>
+              <option>Aumento de peso</option>
+              <option>Patologia</option>
+              <option>Digestivo</option>
+              <option>Renal</option>
+              <option>Hepatico</option>
+              <option>Dermatologico</option>
+              <option>Otro</option>
+            </select>
+          </label>
+          <label>Observaciones nutricionales<textarea name="nutritionNotes" rows="4"></textarea></label>
+        </section>
+        <section class="form-section">
+          <h3>Datos del tutor/dueño</h3>
+          <label>Nombre del tutor<input name="tutorFirstName" required /></label>
+          <label>Apellido del tutor<input name="tutorLastName" required /></label>
+          <label>DNI del tutor<input name="tutorDni" /></label>
+          <label>Email<input name="tutorEmail" type="email" /></label>
+          <label>Telefono<input name="tutorPhone" /></label>
+          <label>Direccion<input name="tutorAddress" /></label>
+          <label>Relacion con el animal<input name="relationship" placeholder="Tutor principal" /></label>
+          <label>Observaciones del tutor<textarea name="tutorNotes" rows="3"></textarea></label>
+        </section>
+        <section class="form-section access-section">
+          <h3>Acceso del tutor a la app</h3>
+          <p>La vinculacion queda preparada por tutor_id, email y DNI. Cuando se conecte Supabase Auth, el tutor solo vera los pacientes asociados a su cuenta.</p>
+          <div class="schema-list">
+            <span>tutors.id</span>
+            <span>patients.tutor_id</span>
+            <span>nutrition_plans.patient_id</span>
+            <span>consultations.patient_id</span>
+            <span>appointments.patient_id</span>
+          </div>
+        </section>
+      </div>
+      <div class="form-actions">
+        <button class="ghost-button" type="button" data-patient-mode="detail">Cancelar</button>
+        <button class="primary-button" type="submit">Guardar paciente</button>
+      </div>
+    </form>
   `;
 }
 
@@ -996,6 +1104,48 @@ function renderPlans() {
         <button class="template">Conservacion de alimentos</button>
       </section>
     </div>
+  `;
+}
+
+function renderFollowUp() {
+  const selected = getPet(store.selectedPetId);
+  return `
+    <div class="content-grid">
+      <section class="panel wide">
+        <div class="section-heading">
+          <div>
+            <span class="eyebrow">Seguimiento</span>
+            <h2>${selected.name}</h2>
+          </div>
+          ${renderPatientSelect("followup-patient", selected.id)}
+        </div>
+        ${renderWeightChart(selected)}
+      </section>
+      <section class="panel">
+        <div class="section-heading">
+          <div>
+            <span class="eyebrow">Recordatorios</span>
+            <h2>Controles</h2>
+          </div>
+        </div>
+        ${selected.reminders.map((item) => `<p class="file-line"><span class="icon">${icons.bell}</span>${item}</p>`).join("")}
+      </section>
+    </div>
+  `;
+}
+
+function renderAlerts() {
+  return `
+    <section class="panel wide clinical-alert-panel">
+      <div class="section-heading">
+        <div>
+          <span class="eyebrow">Alertas clinicas</span>
+          <h2>Solicitudes y urgencias</h2>
+        </div>
+        <button class="soft-button" data-view="calendar">Ver agenda</button>
+      </div>
+      <div class="stack">${store.urgentRequests.map(renderUrgency).join("")}</div>
+    </section>
   `;
 }
 
@@ -1352,6 +1502,205 @@ function toDateInput(date) {
   return date.toISOString().slice(0, 10);
 }
 
+function getNavigationSnapshot() {
+  return {
+    activeView: store.activeView,
+    selectedPetId: store.selectedPetId,
+    patientMode: store.patientMode,
+    patientDetailOpen: store.patientDetailOpen,
+    activeCalendarDate: store.activeCalendarDate,
+  };
+}
+
+function restoreNavigationSnapshot(snapshot) {
+  store.activeView = snapshot.activeView;
+  store.selectedPetId = snapshot.selectedPetId || store.selectedPetId;
+  store.patientMode = snapshot.patientMode || "detail";
+  store.patientDetailOpen = Boolean(snapshot.patientDetailOpen);
+  store.activeCalendarDate = snapshot.activeCalendarDate || store.activeCalendarDate;
+}
+
+function navigateTo(view, options = {}) {
+  const nextSnapshot = {
+    ...getNavigationSnapshot(),
+    activeView: view,
+    patientMode: options.patientMode || (view === "patients" ? "detail" : store.patientMode),
+    patientDetailOpen: Boolean(options.patientDetailOpen),
+  };
+  if (options.selectedPetId) {
+    nextSnapshot.selectedPetId = options.selectedPetId;
+  }
+  const current = JSON.stringify(getNavigationSnapshot());
+  const next = JSON.stringify(nextSnapshot);
+  if (current !== next) {
+    store.navigationHistory.push(getNavigationSnapshot());
+  }
+  restoreNavigationSnapshot(nextSnapshot);
+  render();
+}
+
+function goBack() {
+  const previous = store.navigationHistory.pop();
+  if (previous) {
+    restoreNavigationSnapshot(previous);
+  } else if (store.activeView === "dashboard") {
+    store.activeView = "home";
+  } else {
+    store.activeView = "dashboard";
+  }
+  render();
+}
+
+function savePersistentData() {
+  const data = {
+    tutors: store.tutors,
+    pets: store.pets,
+    nutritionPlans: store.nutritionPlans,
+    consultations: store.consultations,
+    appointments: store.appointments,
+    urgentRequests: store.urgentRequests,
+    foods: store.foods,
+    faqs: store.faqs,
+  };
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+}
+
+function loadPersistentData() {
+  const raw = localStorage.getItem(STORAGE_KEY);
+  if (!raw) return;
+  try {
+    const data = JSON.parse(raw);
+    ["tutors", "pets", "nutritionPlans", "consultations", "appointments", "urgentRequests", "foods", "faqs"].forEach((key) => {
+      if (Array.isArray(data[key])) {
+        store[key] = data[key];
+      }
+    });
+    if (!store.pets.some((pet) => pet.id === store.selectedPetId)) {
+      store.selectedPetId = store.pets[0]?.id || "";
+    }
+  } catch {
+    localStorage.removeItem(STORAGE_KEY);
+  }
+}
+
+function getRequiredText(data, key) {
+  return data.get(key)?.toString().trim() || "";
+}
+
+function createNewPatient(form) {
+  const data = new FormData(form);
+  const petName = getRequiredText(data, "petName");
+  const species = getRequiredText(data, "species");
+  const tutorFirstName = getRequiredText(data, "tutorFirstName");
+  const tutorLastName = getRequiredText(data, "tutorLastName");
+  const tutorDni = getRequiredText(data, "tutorDni");
+  const tutorEmail = getRequiredText(data, "tutorEmail");
+  const weight = Number(getRequiredText(data, "weight"));
+
+  if (!petName || !species || !tutorFirstName || !tutorLastName || (!tutorDni && !tutorEmail)) {
+    alert("Completá nombre del animal, especie, tutor y DNI o email del tutor.");
+    return;
+  }
+
+  const duplicate = store.pets.some((pet) => {
+    const samePet = pet.name.toLowerCase() === petName.toLowerCase();
+    const tutor = store.tutors.find((item) => item.id === pet.tutorId);
+    const sameTutor = tutor && ((tutorDni && tutor.dni === tutorDni) || (tutorEmail && tutor.email === tutorEmail));
+    return samePet && sameTutor;
+  });
+  if (duplicate) {
+    alert("Ya existe un paciente con ese nombre vinculado a ese tutor.");
+    return;
+  }
+
+  let tutor = store.tutors.find((item) => (tutorDni && item.dni === tutorDni) || (tutorEmail && item.email === tutorEmail));
+  if (!tutor) {
+    tutor = {
+      id: crypto.randomUUID(),
+      firstName: tutorFirstName,
+      lastName: tutorLastName,
+      dni: tutorDni || "Pendiente",
+      email: tutorEmail || "Pendiente",
+      phone: getRequiredText(data, "tutorPhone") || "Pendiente",
+      address: getRequiredText(data, "tutorAddress") || "Pendiente",
+      relationship: getRequiredText(data, "relationship") || "Tutor principal",
+      notes: getRequiredText(data, "tutorNotes"),
+      createdAt: new Date().toISOString(),
+    };
+    store.tutors.push(tutor);
+  }
+
+  const pet = {
+    id: crypto.randomUUID(),
+    tutorId: tutor.id,
+    name: petName,
+    species,
+    breed: getRequiredText(data, "breed") || "Sin especificar",
+    sex: getRequiredText(data, "sex"),
+    age: getRequiredText(data, "age") || "Pendiente",
+    birthDate: getRequiredText(data, "birthDate"),
+    weight: Number.isFinite(weight) ? weight : 0,
+    targetWeight: Number(getRequiredText(data, "targetWeight")) || (Number.isFinite(weight) ? weight : 0),
+    bodyScore: getRequiredText(data, "bodyScore") || "Pendiente",
+    reproductiveStatus: getRequiredText(data, "reproductiveStatus"),
+    activityLevel: getRequiredText(data, "activityLevel"),
+    pathologies: getRequiredText(data, "pathologies"),
+    allergies: getRequiredText(data, "allergies") || "No informadas",
+    medication: getRequiredText(data, "medication") || "No informada",
+    notes: getRequiredText(data, "notes") || "Sin observaciones generales.",
+    tutor: `${tutor.firstName} ${tutor.lastName}`.trim(),
+    phone: tutor.phone,
+    email: tutor.email,
+    status: "Pendiente plan",
+    documents: [],
+    reminders: ["Completar estudios iniciales", "Definir plan nutricional"],
+    weights: Number.isFinite(weight) ? [weight] : [],
+    nutrition: {
+      currentFoodType: getRequiredText(data, "currentFoodType"),
+      currentFoodBrand: getRequiredText(data, "currentFoodBrand"),
+      dailyAmount: getRequiredText(data, "dailyAmount"),
+      mealFrequency: getRequiredText(data, "mealFrequency"),
+      snacks: getRequiredText(data, "snacks"),
+      restrictedFoods: getRequiredText(data, "restrictedFoods"),
+      goal: getRequiredText(data, "nutritionGoal"),
+      notes: getRequiredText(data, "nutritionNotes"),
+    },
+    plan: [],
+    createdAt: new Date().toISOString(),
+  };
+
+  store.pets.unshift(pet);
+  store.nutritionPlans.unshift({
+    id: crypto.randomUUID(),
+    patientId: pet.id,
+    title: "Plan nutricional pendiente",
+    objective: pet.nutrition.goal || "Definir objetivo",
+    breakfast: "",
+    lunch: "",
+    snack: "",
+    dinner: "",
+    indications: "Completar luego de revisar estudios y primera consulta.",
+    status: "inactivo",
+    createdAt: new Date().toISOString(),
+  });
+  store.consultations.unshift({
+    id: crypto.randomUUID(),
+    patientId: pet.id,
+    date: toDateInput(today),
+    reason: "Alta inicial",
+    diagnosis: "",
+    indications: "Pendiente evaluacion profesional.",
+    observations: pet.notes,
+    createdAt: new Date().toISOString(),
+  });
+
+  store.selectedPetId = pet.id;
+  store.patientMode = "detail";
+  savePersistentData();
+  alert("Paciente guardado y vinculado al tutor.");
+  render();
+}
+
 function bindEvents() {
   document.querySelectorAll("[data-agenda-date]").forEach((select) => {
     select.addEventListener("change", () => {
@@ -1384,6 +1733,8 @@ function bindEvents() {
       store.activeRole = role || store.activeRole;
       store.isAuthenticated = true;
       store.activeView = getHomeView();
+      store.navigationHistory = [];
+      store.patientMode = "detail";
       store.patientDetailOpen = false;
       render();
     });
@@ -1393,6 +1744,8 @@ function bindEvents() {
     button.addEventListener("click", () => {
       store.isAuthenticated = false;
       store.activeView = getHomeView();
+      store.navigationHistory = [];
+      store.patientMode = "detail";
       store.patientDetailOpen = false;
       render();
     });
@@ -1400,9 +1753,7 @@ function bindEvents() {
 
   document.querySelectorAll("[data-back-home]").forEach((button) => {
     button.addEventListener("click", () => {
-      store.activeView = getHomeView();
-      store.patientDetailOpen = false;
-      render();
+      goBack();
     });
   });
 
@@ -1415,17 +1766,22 @@ function bindEvents() {
 
   document.querySelectorAll("[data-view]").forEach((button) => {
     button.addEventListener("click", () => {
-      if (button.dataset.pet) {
-        store.selectedPetId = button.dataset.pet;
-        store.patientDetailOpen = true;
+      navigateTo(button.dataset.view, {
+        selectedPetId: button.dataset.pet,
+        patientMode: button.dataset.patientMode || "detail",
+        patientDetailOpen: Boolean(button.dataset.pet),
+      });
+    });
+  });
+
+  document.querySelectorAll("[data-patient-mode]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const mode = button.dataset.patientMode;
+      if (mode === "new") {
+        navigateTo("patients", { patientMode: "new" });
+      } else {
+        goBack();
       }
-      store.activeView = button.dataset.view;
-      if (store.activeView !== "patients") {
-        store.patientDetailOpen = false;
-      } else if (!button.dataset.pet) {
-        store.patientDetailOpen = false;
-      }
-      render();
     });
   });
 
@@ -1433,6 +1789,8 @@ function bindEvents() {
     button.addEventListener("click", () => {
       store.activeRole = button.dataset.role;
       store.activeView = getHomeView();
+      store.navigationHistory = [];
+      store.patientDetailOpen = false;
       store.patientDetailOpen = false;
       render();
     });
@@ -1452,6 +1810,13 @@ function bindEvents() {
     });
   });
 
+  document.querySelectorAll("[data-new-patient-form]").forEach((form) => {
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      createNewPatient(form);
+    });
+  });
+
   document.querySelectorAll("[data-add-faq]").forEach((button) => {
     button.addEventListener("click", () => {
       const question = prompt("Nueva pregunta frecuente");
@@ -1464,6 +1829,7 @@ function bindEvents() {
         answer,
         visible: true,
       });
+      savePersistentData();
       render();
     });
   });
@@ -1478,6 +1844,7 @@ function bindEvents() {
         use: "Uso pendiente de completar por la veterinaria.",
         cautions: "Revisar indicaciones segun paciente.",
       });
+      savePersistentData();
       render();
     });
   });
@@ -1490,6 +1857,7 @@ function bindEvents() {
         meals: "Definir frecuencia",
         detail: "Completar gramos, ingredientes, suplementos y observaciones.",
       });
+      savePersistentData();
       render();
     });
   });
@@ -1507,6 +1875,7 @@ function bindEvents() {
         petId: request.petId,
         status: "A confirmar por tutor",
       });
+      savePersistentData();
       alert("Se habilito un turno urgente y quedo listo para notificar al tutor.");
       render();
     });
@@ -1529,6 +1898,7 @@ function bindEvents() {
         petId: "mora",
         status: "Pendiente",
       });
+      savePersistentData();
       alert("Solicitud enviada a la veterinaria. El turno queda pendiente de confirmacion.");
       render();
     });
@@ -1558,6 +1928,7 @@ function bindEvents() {
         createdAt: "Ahora",
         severity: data.get("severity"),
       });
+      savePersistentData();
       alert("La alerta fue enviada a la veterinaria.");
       store.activeRole = "vet";
       store.activeView = "dashboard";
@@ -1570,4 +1941,5 @@ if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("sw.js").catch(() => {});
 }
 
+loadPersistentData();
 render();
