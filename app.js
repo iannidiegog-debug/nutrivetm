@@ -5,7 +5,7 @@ const today = new Date("2026-06-05T12:00:00-03:00");
 const store = {
   isAuthenticated: false,
   activeRole: "vet",
-  activeView: "dashboard",
+  activeView: "home",
   selectedPetId: "mora",
   patientDetailOpen: false,
   faqs: [
@@ -195,7 +195,7 @@ const views = [
   { id: "plans", label: "Planes", icon: "bowl" },
   { id: "library", label: "Biblioteca", icon: "book" },
   { id: "faq", label: "FAQ", icon: "help" },
-  { id: "settings", label: "Integraciones", icon: "settings" },
+  { id: "settings", label: "Configuracion", icon: "settings" },
 ];
 
 const appointmentSlots = ["09:00", "09:30", "10:00", "10:30", "11:00", "15:30", "16:00", "16:30", "17:00"];
@@ -249,12 +249,20 @@ function render() {
     bindEvents();
     return;
   }
+  const home = renderAccountHome();
+  if (store.activeView === "home") {
+    app.innerHTML = home;
+    bindEvents();
+    return;
+  }
   app.innerHTML = `
-    <main class="shell ${store.activeRole === "tutor" ? "tutor-mode" : ""}">
-      ${renderSidebar()}
-      <section class="workspace">
-        ${renderTopbar()}
-        ${store.activeRole === "vet" ? renderVetView() : renderTutorView()}
+    <main class="flow-shell ${store.activeRole === "tutor" ? "tutor-mode" : ""}">
+      <div class="flow-backdrop" aria-hidden="true">${home}</div>
+      <section class="flow-sheet">
+        ${renderFlowHeader()}
+        <div class="flow-content">
+          ${store.activeRole === "vet" ? renderVetView() : renderTutorView()}
+        </div>
       </section>
     </main>
   `;
@@ -276,24 +284,21 @@ function renderLogin() {
       <section class="login-panel">
         <div>
           <span class="eyebrow">Ingresar</span>
-          <h2>Elegir perfil</h2>
-        </div>
-        <div class="login-role-grid">
-          <button class="login-role ${store.activeRole === "vet" ? "selected" : ""}" data-login-role="vet">
-            <span class="icon">${icons.settings}</span>
-            <strong>Melanie / Admin</strong>
-            <small>Agenda, pacientes, planes y biblioteca.</small>
-          </button>
-          <button class="login-role ${store.activeRole === "tutor" ? "selected" : ""}" data-login-role="tutor">
-            <span class="icon">${icons.paw}</span>
-            <strong>Tutor</strong>
-            <small>Turnos, ficha, plan, FAQ y urgencias.</small>
-          </button>
+          <h2>Acceso</h2>
         </div>
         <form class="login-form" data-login-form>
           <label>
+            Perfil
+            <span class="select-wrap">
+              <select name="role" data-login-role-select>
+                <option value="vet" ${store.activeRole === "vet" ? "selected" : ""}>Veterinaria</option>
+                <option value="tutor" ${store.activeRole === "tutor" ? "selected" : ""}>Tutor</option>
+              </select>
+            </span>
+          </label>
+          <label>
             Usuario
-            <input name="username" autocomplete="username" placeholder="melanie o tutor.demo" />
+            <input name="username" autocomplete="username" placeholder="usuario.demo" />
           </label>
           <label>
             Contrasena
@@ -301,11 +306,86 @@ function renderLogin() {
           </label>
           <button class="primary-button submit" type="submit">
             <span class="icon">${icons.check}</span>
-            Entrar como ${store.activeRole === "vet" ? "Melanie" : "Tutor"}
+            Entrar como ${store.activeRole === "vet" ? "Veterinaria" : "Tutor"}
           </button>
         </form>
       </section>
     </main>
+  `;
+}
+
+function renderAccountHome() {
+  const list = getHomeModules();
+  const isVet = store.activeRole === "vet";
+  return `
+    <main class="home-shell ${store.activeRole === "tutor" ? "tutor-mode" : ""}">
+      <section class="profile-top">
+        <button class="brand compact-brand" data-view="home">
+          <span class="brand-mark">NM</span>
+          <span>
+            <strong>${appConfig.appName}</strong>
+            <small>${isVet ? "Perfil veterinaria" : "Perfil tutor"}</small>
+          </span>
+        </button>
+        <div class="profile-summary">
+          <span class="eyebrow">${isVet ? "Consultorio nutricional veterinario" : "Seguimiento del paciente"}</span>
+          <h1>${isVet ? "Hola, Veterinaria" : "Hola, Tutor"}</h1>
+          <p>${isVet ? "Elegir un modulo para gestionar agenda, pacientes, planes y consultas." : "Elegir un modulo para ver turnos, ficha, plan y consultas."}</p>
+        </div>
+        <div class="account-actions">
+          <button class="ghost-button" data-view="settings">
+            <span class="icon">${icons.settings}</span>
+            Configuracion
+          </button>
+          <button class="soft-button" data-logout>Cerrar sesion</button>
+        </div>
+      </section>
+      <section class="module-grid" aria-label="Modulos principales">
+        ${list.map(renderModuleCard).join("")}
+      </section>
+    </main>
+  `;
+}
+
+function getHomeModules() {
+  if (store.activeRole === "tutor") {
+    return tutorViews.filter((item) => item.id !== "tutor-home");
+  }
+  return [
+    { id: "dashboard", label: "Panel", icon: "grid" },
+    { id: "calendar", label: "Agenda", icon: "calendar" },
+    { id: "patients", label: "Pacientes", icon: "paw" },
+    { id: "plans", label: "Planes", icon: "bowl" },
+    { id: "library", label: "Biblioteca", icon: "book" },
+    { id: "faq", label: "Preguntas frecuentes", icon: "help" },
+  ];
+}
+
+function renderModuleCard(item) {
+  return `
+    <button class="module-card" data-view="${item.id}">
+      <span class="icon">${icons[item.icon]}</span>
+      <span>
+        <strong>${item.label}</strong>
+        <small>${getMobileEntryText(item.id)}</small>
+      </span>
+    </button>
+  `;
+}
+
+function renderFlowHeader() {
+  return `
+    <header class="flow-header">
+      <button class="ghost-button" data-back-home>
+        <span class="icon">${icons.arrow}</span>
+        Volver
+      </button>
+      <div>
+        <span class="eyebrow">${store.activeView === "settings" ? "Configuracion" : appConfig.appName}</span>
+        <h1>${getTitle()}</h1>
+      </div>
+      <button class="soft-button" data-logout>Cerrar sesion</button>
+    </header>
   `;
 }
 
@@ -333,12 +413,8 @@ function renderSidebar() {
           .join("")}
       </nav>
       <div class="role-card">
-        <span class="eyebrow">Vista demo</span>
-        <div class="segmented">
-          <button class="${store.activeRole === "vet" ? "selected" : ""}" data-role="vet">Veterinaria</button>
-          <button class="${store.activeRole === "tutor" ? "selected" : ""}" data-role="tutor">Tutor</button>
-        </div>
-        <button class="soft-button compact logout-button" data-logout>Salir</button>
+        <button class="ghost-button compact logout-button" data-view="settings">Configuracion</button>
+        <button class="soft-button compact logout-button" data-logout>Cerrar sesion</button>
       </div>
     </aside>
   `;
@@ -375,19 +451,19 @@ function renderTopbar() {
 }
 
 function getHomeView(role = store.activeRole) {
-  return role === "vet" ? "dashboard" : "tutor-home";
+  return "home";
 }
 
 function getTitle() {
   const titles = {
-    dashboard: "Panel de Melanie",
+    dashboard: "Panel",
     calendar: "Agenda interna",
     patients: "Pacientes",
     plans: "Planes alimentarios",
     library: "Biblioteca BARF",
     faq: "Preguntas frecuentes",
-    settings: "Integraciones",
-    "tutor-home": "Hola, Agustin",
+    settings: "Configuracion",
+    "tutor-home": "Inicio",
     "tutor-calendar": "Elegir turno",
     "tutor-pet": "Ficha de Mora",
     "tutor-plan": "Plan de Mora",
@@ -574,7 +650,7 @@ function renderCalendar() {
             <h2>Urgencias</h2>
           </div>
         </div>
-        <p class="muted">El tutor no reserva automaticamente una urgencia. La app crea alerta, Melanie evalua y habilita un turno o responde con indicaciones.</p>
+        <p class="muted">El tutor no reserva automaticamente una urgencia. La app crea alerta, la veterinaria evalua y habilita un turno o responde con indicaciones.</p>
         <div class="stack">${store.urgentRequests.map(renderUrgency).join("")}</div>
       </section>
     </div>
@@ -589,12 +665,12 @@ function renderTutorCalendar() {
       <section class="panel wide">
         <div class="section-heading">
           <div>
-            <span class="eyebrow">Agenda de Melanie</span>
+            <span class="eyebrow">Agenda de la veterinaria</span>
             <h2>Turnos disponibles</h2>
           </div>
           <span class="badge">Consulta comun</span>
         </div>
-        <p class="muted">Elegi un horario libre para solicitar turno. Melanie lo vera como pendiente y podra confirmarlo desde su agenda.</p>
+        <p class="muted">Elegi un horario libre para solicitar turno. La veterinaria lo vera como pendiente y podra confirmarlo desde su agenda.</p>
         <div class="calendar-board tutor-calendar">
           ${[0, 1, 2, 3, 4]
             .map((offset) => {
@@ -812,7 +888,7 @@ function renderFaq(options = {}) {
       <section class="panel wide">
         <div class="section-heading">
           <div>
-            <span class="eyebrow">${options.tutor ? "Centro de ayuda" : "Editable por Melanie"}</span>
+            <span class="eyebrow">${options.tutor ? "Centro de ayuda" : "Editable por veterinaria"}</span>
             <h2>Preguntas frecuentes</h2>
           </div>
           ${options.tutor ? "" : `<button class="primary-button" data-add-faq>Nueva pregunta</button>`}
@@ -846,7 +922,7 @@ function renderSettings() {
       <div class="section-heading">
         <div>
           <span class="eyebrow">Gratis y preparado</span>
-          <h2>Integraciones</h2>
+          <h2>Servicios e integraciones</h2>
         </div>
       </div>
       <div class="integration-grid">
@@ -880,7 +956,7 @@ function renderTutorHome() {
         <div class="hero-copy">
           <span class="eyebrow">Plan activo</span>
           <h2>${pet.name} tiene su seguimiento nutricional al dia.</h2>
-          <p>Subi peso, fotos y consultas desde aca para que Melanie pueda ajustar el plan.</p>
+          <p>Subi peso, fotos y consultas desde aca para que la veterinaria pueda ajustar el plan.</p>
         </div>
       </section>
       <section class="metrics">
@@ -936,6 +1012,7 @@ function renderMobileEntryGrid(list) {
 
 function getMobileEntryText(id) {
   const copy = {
+    dashboard: "Resumen de actividad.",
     calendar: "Disponibilidad y urgencias.",
     patients: "Legajos y evolucion.",
     plans: "Etapas del plan alimentario.",
@@ -946,7 +1023,7 @@ function getMobileEntryText(id) {
     "tutor-pet": "Ficha y documentos de Mora.",
     "tutor-plan": "Plan nutricional activo.",
     "tutor-faq": "Respuestas rapidas.",
-    "tutor-urgent": "Enviar alerta a Melanie.",
+    "tutor-urgent": "Enviar alerta a la veterinaria.",
   };
   return copy[id] || "Abrir seccion.";
 }
@@ -982,7 +1059,7 @@ function renderTutorPet() {
         </article>
         <article>
           <h3>Indicaciones</h3>
-          <p>Melanie puede actualizar las indicaciones despues de cada control nutricional.</p>
+          <p>La veterinaria puede actualizar las indicaciones despues de cada control nutricional.</p>
         </article>
       </div>
       ${renderWeightChart(pet)}
@@ -1030,7 +1107,7 @@ function renderTutorUrgent() {
           <h2>Urgencia</h2>
         </div>
       </div>
-      <p class="muted">Esto no confirma un turno automatico. Melanie recibe una alerta, revisa el caso y habilita un espacio urgente o responde con indicaciones.</p>
+      <p class="muted">Esto no confirma un turno automatico. La veterinaria recibe una alerta, revisa el caso y habilita un espacio urgente o responde con indicaciones.</p>
       <form class="urgent-form" data-urgent-form>
         <label>
           Mascota
@@ -1082,9 +1159,9 @@ function toDateInput(date) {
 }
 
 function bindEvents() {
-  document.querySelectorAll("[data-login-role]").forEach((button) => {
-    button.addEventListener("click", () => {
-      store.activeRole = button.dataset.loginRole;
+  document.querySelectorAll("[data-login-role-select]").forEach((select) => {
+    select.addEventListener("change", () => {
+      store.activeRole = select.value;
       render();
     });
   });
@@ -1092,6 +1169,8 @@ function bindEvents() {
   document.querySelectorAll("[data-login-form]").forEach((form) => {
     form.addEventListener("submit", (event) => {
       event.preventDefault();
+      const role = new FormData(form).get("role");
+      store.activeRole = role || store.activeRole;
       store.isAuthenticated = true;
       store.activeView = getHomeView();
       store.patientDetailOpen = false;
@@ -1189,7 +1268,7 @@ function bindEvents() {
       store.foods.unshift({
         name,
         group: "Personalizado",
-        use: "Uso pendiente de completar por Melanie.",
+        use: "Uso pendiente de completar por la veterinaria.",
         cautions: "Revisar indicaciones segun paciente.",
       });
       render();
@@ -1243,7 +1322,7 @@ function bindEvents() {
         petId: "mora",
         status: "Pendiente",
       });
-      alert("Solicitud enviada a Melanie. El turno queda pendiente de confirmacion.");
+      alert("Solicitud enviada a la veterinaria. El turno queda pendiente de confirmacion.");
       render();
     });
   });
@@ -1272,7 +1351,7 @@ function bindEvents() {
         createdAt: "Ahora",
         severity: data.get("severity"),
       });
-      alert("La alerta fue enviada a Melanie.");
+      alert("La alerta fue enviada a la veterinaria.");
       store.activeRole = "vet";
       store.activeView = "dashboard";
       render();
