@@ -251,6 +251,7 @@ const appointmentSlots = buildAppointmentSlots(9, 19, 2);
 
 const tutorViews = [
   { id: "tutor-home", label: "Inicio", icon: "home" },
+  { id: "tutor-docs", label: "Documentacion", icon: "upload" },
   { id: "tutor-calendar", label: "Turnos", icon: "calendar" },
   { id: "tutor-pet", label: "Mi mascota", icon: "paw" },
   { id: "tutor-plan", label: "Plan", icon: "bowl" },
@@ -420,12 +421,13 @@ function getHomeModules() {
 }
 
 function renderModuleCard(item) {
+  const locked = store.activeRole === "tutor" && isTutorModuleLocked(item.id);
   return `
-    <button class="module-card" data-view="${item.id}">
+    <button class="module-card ${locked ? "locked" : ""}" data-view="${item.id}" ${locked ? "disabled aria-disabled=\"true\"" : ""}>
       <span class="icon">${icons[item.icon]}</span>
       <span>
         <strong>${item.label}</strong>
-        <small>${getMobileEntryText(item.id)}</small>
+        <small>${getModuleStatusText(item.id)}</small>
       </span>
     </button>
   `;
@@ -566,6 +568,7 @@ function getTitle() {
     faq: "Preguntas frecuentes",
     settings: "Configuracion",
     "tutor-home": "Inicio",
+    "tutor-docs": "Documentacion preconsulta",
     "tutor-calendar": "Elegir turno",
     "tutor-pet": "Ficha de Mora",
     "tutor-plan": "Plan de Mora",
@@ -593,6 +596,7 @@ function renderVetView() {
 function renderTutorView() {
   const sections = {
     "tutor-home": renderTutorHome,
+    "tutor-docs": renderTutorDocuments,
     "tutor-calendar": renderTutorCalendar,
     "tutor-pet": renderTutorPet,
     "tutor-plan": renderTutorPlan,
@@ -855,6 +859,15 @@ function renderCalendar() {
 }
 
 function renderTutorCalendar() {
+  if (!hasTutorPreVisitDocs()) {
+    return renderTutorLockedScreen({
+      eyebrow: "Documentacion pendiente",
+      title: "Carga los archivos antes de solicitar un turno comun",
+      text: "Para la primera consulta, la veterinaria necesita revisar estudios, fotos o documentacion previa. Las urgencias siguen disponibles.",
+      primaryView: "tutor-docs",
+      primaryLabel: "Cargar documentacion",
+    });
+  }
   const weekDays = getWeekDays(today);
   const availableDays = getAvailableDays(weekDays);
   const selectedDate = getValidCalendarDate(availableDays.length ? availableDays : weekDays);
@@ -944,10 +957,21 @@ function renderPatients() {
           ${detail("Alergias", selected.allergies)}
           ${detail("Medicacion", selected.medication)}
         </div>
+        <div class="access-control-card">
+          <div>
+            <span class="eyebrow">Vista del tutor</span>
+            <h3>${selected.tutorPortalEnabled ? "Acceso habilitado" : "Acceso pendiente"}</h3>
+            <p>${selected.tutorPortalEnabled ? "El tutor puede ver ficha, plan e indicaciones publicadas." : "Hasta habilitarlo, el tutor solo puede cargar documentacion, pedir urgencia, ver FAQ y solicitar turno comun si ya cargo archivos."}</p>
+          </div>
+          <button class="${selected.tutorPortalEnabled ? "ghost-button" : "primary-button"}" data-toggle-tutor-access="${selected.id}">
+            ${selected.tutorPortalEnabled ? "Deshabilitar acceso" : "Habilitar acceso tutor"}
+          </button>
+        </div>
         <div class="tabs">
           <article>
             <h3>Documentacion</h3>
             ${selected.documents.map((doc) => `<p class="file-line"><span class="icon">${icons.file}</span>${doc}</p>`).join("")}
+            ${(selected.preVisitDocuments || []).map((doc) => `<p class="file-line"><span class="icon">${icons.upload}</span>${doc.name}</p>`).join("")}
           </article>
           <article>
             <h3>Recordatorios</h3>
@@ -1334,7 +1358,7 @@ function renderPlanStageCard(stage) {
           <h3>${stage.name}</h3>
           <p>Dias ${stage.dayFrom || "-"} a ${stage.dayTo || "-"}</p>
         </div>
-        <span class="time">${stage.mealCount || "2"}x</span>
+        <span class="meal-count-pill">${formatMealFrequency(stage.mealCount)}</span>
       </div>
       <p><strong>Objetivo:</strong> ${stage.objective || "Pendiente"}</p>
       <p><strong>Comidas:</strong> ${stage.mealDetailsText || "Completar detalle por comida."}</p>
@@ -1647,42 +1671,48 @@ function renderTutorHome() {
   const pet = getPet("mora");
   const activePlan = getActivePlan(pet.id);
   const stages = activePlan ? getPlanStages(activePlan.id) : [];
+  const docsLoaded = hasTutorPreVisitDocs();
+  const portalEnabled = hasTutorPortalAccess();
   return `
     <div class="dashboard-grid">
       <section class="hero-panel tutor-hero">
         <img src="nutrivetm-hero.png" alt="Consultorio veterinario moderno con perro y gato" />
         <div class="hero-copy">
-          <span class="eyebrow">Plan activo</span>
-          <h2>${pet.name} tiene su seguimiento nutricional al dia.</h2>
-          <p>Subi peso, fotos y consultas desde aca para que la veterinaria pueda ajustar el plan.</p>
+          <span class="eyebrow">Primera consulta</span>
+          <h2>Carga la documentacion para solicitar un turno.</h2>
+          <p>El turno comun se habilita cuando ya estan cargados estudios, fotos o archivos solicitados por la veterinaria.</p>
         </div>
       </section>
       <section class="metrics">
-        ${metric("Peso actual", `${pet.weight} kg`, "weight")}
-        ${metric("Recordatorios", pet.reminders.length, "bell")}
-        ${metric("Documentos", pet.documents.length, "file")}
-        ${metric("Etapas", stages.length, "bowl")}
+        ${metric("Documentacion", docsLoaded ? "Lista" : "Pendiente", "file", docsLoaded ? "" : "danger", "tutor-docs")}
+        ${metric("Turno comun", docsLoaded ? "Habilitado" : "Bloqueado", "calendar", docsLoaded ? "" : "danger", docsLoaded ? "tutor-calendar" : "tutor-docs")}
+        ${metric("Urgencia", "Disponible", "bell", "", "tutor-urgent")}
+        ${metric("Acceso postconsulta", portalEnabled ? "Activo" : "Pendiente", "paw", portalEnabled ? "" : "danger", portalEnabled ? "tutor-pet" : "")}
       </section>
       ${renderMobileEntryGrid(tutorViews.filter((item) => item.id !== "tutor-home"))}
-      <section class="panel">
+      <section class="panel document-gate-card">
         <div class="section-heading">
           <div>
-            <span class="eyebrow">Proximo paso</span>
-            <h2>Documentacion</h2>
+            <span class="eyebrow">Paso obligatorio</span>
+            <h2>Documentacion para primera consulta</h2>
           </div>
-          <button class="primary-button" data-upload-demo>Subir archivo</button>
+          <button class="primary-button" data-view="tutor-docs">${docsLoaded ? "Ver archivos" : "Cargar archivos"}</button>
         </div>
-        <p class="muted">Cargar fotos actuales, estudios y peso nuevo ayuda a mantener el plan ajustado.</p>
-        ${pet.documents.map((doc) => `<p class="file-line"><span class="icon">${icons.file}</span>${doc}</p>`).join("")}
+        <p class="muted">Antes de pedir un turno comun, carga analisis de sangre, fotos actuales y cualquier documento que la veterinaria haya solicitado. Las urgencias quedan disponibles aunque falte documentacion.</p>
+        ${renderTutorDocumentList()}
       </section>
       <section class="panel">
         <div class="section-heading">
           <div>
-            <span class="eyebrow">Recordatorios</span>
-            <h2>Seguimiento</h2>
+            <span class="eyebrow">Acceso posterior</span>
+            <h2>Mi mascota y plan</h2>
           </div>
         </div>
-        ${pet.reminders.map((item) => `<p class="file-line"><span class="icon">${icons.bell}</span>${item}</p>`).join("")}
+        <p class="muted">${portalEnabled ? "La veterinaria ya habilito la ficha, el plan y el seguimiento del paciente." : "Estas secciones se habilitan despues del turno, cuando la veterinaria cargue el legajo y active el acceso del tutor."}</p>
+        <div class="locked-actions">
+          <button class="soft-button" data-view="tutor-urgent">Solicitar urgencia</button>
+          <button class="soft-button" data-view="tutor-faq">Preguntas frecuentes</button>
+        </div>
       </section>
     </div>
   `;
@@ -1693,18 +1723,66 @@ function renderMobileEntryGrid(list) {
     <section class="mobile-entry-grid">
       ${list
         .map(
-          (item) => `
-            <button class="mobile-entry" data-view="${item.id}">
+          (item) => {
+            const locked = store.activeRole === "tutor" && isTutorModuleLocked(item.id);
+            return `
+            <button class="mobile-entry ${locked ? "locked" : ""}" data-view="${item.id}" ${locked ? "disabled aria-disabled=\"true\"" : ""}>
               <span class="icon">${icons[item.icon]}</span>
               <span>
                 <strong>${item.label}</strong>
-                <small>${getMobileEntryText(item.id)}</small>
+                <small>${getModuleStatusText(item.id)}</small>
               </span>
             </button>
-          `
+          `;
+          }
         )
         .join("")}
     </section>
+  `;
+}
+
+function renderTutorDocuments() {
+  const docsLoaded = hasTutorPreVisitDocs();
+  return `
+    <div class="content-grid">
+      <section class="panel wide document-upload-panel">
+        <div class="section-heading">
+          <div>
+            <span class="eyebrow">Paso previo al turno</span>
+            <h2>Documentacion para primera consulta</h2>
+          </div>
+          <span class="badge ${docsLoaded ? "" : "danger"}">${docsLoaded ? "Documentacion cargada" : "Pendiente"}</span>
+        </div>
+        <p class="muted">Carga analisis de sangre, fotos actuales y cualquier archivo indicado por la veterinaria. Se aceptan PDF, Word e imagenes.</p>
+        <form class="upload-dropzone" data-doc-upload-form>
+          <span class="icon">${icons.upload}</span>
+          <div>
+            <h3>Subir archivos</h3>
+            <p>PDF, DOC, DOCX, JPG, PNG, WEBP o HEIC. Podes seleccionar varios archivos a la vez.</p>
+          </div>
+          <input name="documents" type="file" multiple accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp,.heic,image/*,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" required />
+          <button class="primary-button" type="submit">Guardar documentacion</button>
+        </form>
+        <div class="document-checklist">
+          <article>${icons.check}<span>Analisis de sangre reciente</span></article>
+          <article>${icons.check}<span>Fotos de frente, perfil y cuerpo completo</span></article>
+          <article>${icons.check}<span>Peso actual y alimentacion que recibe hoy</span></article>
+        </div>
+      </section>
+      <section class="panel">
+        <div class="section-heading">
+          <div>
+            <span class="eyebrow">Archivos cargados</span>
+            <h2>${getTutorPreVisitDocs().length}</h2>
+          </div>
+        </div>
+        ${renderTutorDocumentList()}
+        <div class="locked-actions">
+          <button class="primary-button" data-view="${docsLoaded ? "tutor-calendar" : "tutor-docs"}" ${docsLoaded ? "" : "disabled"}>Solicitar turno comun</button>
+          <button class="soft-button" data-view="tutor-urgent">Solicitar urgencia</button>
+        </div>
+      </section>
+    </div>
   `;
 }
 
@@ -1726,8 +1804,33 @@ function getMobileEntryText(id) {
   return copy[id] || "Abrir seccion.";
 }
 
+function getModuleStatusText(id) {
+  if (store.activeRole !== "tutor") {
+    return getMobileEntryText(id);
+  }
+  if (id === "tutor-docs") {
+    return hasTutorPreVisitDocs() ? "Archivos cargados." : "Primer paso obligatorio.";
+  }
+  if (id === "tutor-calendar") {
+    return hasTutorPreVisitDocs() ? "Elegir un horario disponible." : "Se habilita al cargar documentacion.";
+  }
+  if (id === "tutor-pet" || id === "tutor-plan") {
+    return hasTutorPortalAccess() ? getMobileEntryText(id) : "Se habilita despues del turno.";
+  }
+  return getMobileEntryText(id);
+}
+
 function renderTutorPet() {
   const pet = getPet("mora");
+  if (!hasTutorPortalAccess()) {
+    return renderTutorLockedScreen({
+      eyebrow: "Acceso pendiente",
+      title: "La ficha se habilita despues del turno",
+      text: "Cuando la veterinaria cargue el legajo y active el acceso, vas a poder ver datos de tu mascota, seguimiento e indicaciones.",
+      primaryView: "tutor-docs",
+      primaryLabel: "Ver documentacion",
+    });
+  }
   return `
     <section class="panel wide patient-detail">
       <div class="patient-header">
@@ -1767,6 +1870,15 @@ function renderTutorPet() {
 
 function renderTutorPlan() {
   const pet = getPet("mora");
+  if (!hasTutorPortalAccess()) {
+    return renderTutorLockedScreen({
+      eyebrow: "Acceso pendiente",
+      title: "El plan se habilita despues de la consulta",
+      text: "La veterinaria publicara el plan alimentario cuando ya tenga los estudios, la consulta y el legajo cargados.",
+      primaryView: hasTutorPreVisitDocs() ? "tutor-calendar" : "tutor-docs",
+      primaryLabel: hasTutorPreVisitDocs() ? "Solicitar turno" : "Cargar documentacion",
+    });
+  }
   const activePlan = getActivePlan(pet.id);
   const stages = activePlan ? getPlanStages(activePlan.id) : [];
   return `
@@ -1786,7 +1898,7 @@ function renderTutorPlan() {
                   <span class="badge">${stage.status}</span>
                   <h3>${stage.name}</h3>
                   <p><strong>Que darle:</strong> ${stage.mealDetailsText || "Indicacion pendiente."}</p>
-                  <p><strong>Cuando:</strong> ${stage.mealCount || "2"} comidas diarias.</p>
+                  <p><strong>Cuando:</strong> ${formatMealFrequency(stage.mealCount)}.</p>
                   <p><strong>Que evitar:</strong> ${stage.forbiddenFoods || "Sin restricciones cargadas."}</p>
                   <p><strong>Importante:</strong> ${stage.tutorNotes || "Seguir el plan indicado por la veterinaria."}</p>
                   <p><strong>Senales de alarma:</strong> ${(stage.alarmSigns || []).join(", ") || "Consultar si aparecen vomitos, diarrea o rechazo de alimento."}</p>
@@ -1795,6 +1907,26 @@ function renderTutorPlan() {
               `).join("")
             : renderEmptyState("Plan pendiente", "La veterinaria todavia no publico un plan alimentario para este paciente.")
         }
+      </div>
+    </section>
+  `;
+}
+
+function renderTutorLockedScreen({ eyebrow, title, text, primaryView, primaryLabel }) {
+  return `
+    <section class="panel wide locked-panel">
+      <div class="section-heading">
+        <div>
+          <span class="eyebrow">${eyebrow}</span>
+          <h2>${title}</h2>
+        </div>
+        <span class="badge danger">No habilitado</span>
+      </div>
+      <p class="muted">${text}</p>
+      <div class="locked-actions">
+        <button class="primary-button" data-view="${primaryView}">${primaryLabel}</button>
+        <button class="soft-button" data-view="tutor-urgent">Solicitar urgencia</button>
+        <button class="ghost-button" data-view="tutor-faq">Preguntas frecuentes</button>
       </div>
     </section>
   `;
@@ -1840,6 +1972,73 @@ function renderTutorUrgent() {
 
 function getPet(id) {
   return store.pets.find((pet) => pet.id === id) || store.pets[0];
+}
+
+function getTutorPet() {
+  return getPet("mora");
+}
+
+function getTutorPreVisitDocs() {
+  const pet = getTutorPet();
+  return Array.isArray(pet.preVisitDocuments) ? pet.preVisitDocuments : [];
+}
+
+function hasTutorPreVisitDocs() {
+  return getTutorPreVisitDocs().length > 0;
+}
+
+function hasTutorPortalAccess() {
+  return Boolean(getTutorPet().tutorPortalEnabled);
+}
+
+function isTutorModuleLocked(id) {
+  if (id === "tutor-calendar") {
+    return !hasTutorPreVisitDocs();
+  }
+  if (id === "tutor-pet" || id === "tutor-plan") {
+    return !hasTutorPortalAccess();
+  }
+  return false;
+}
+
+function renderTutorDocumentList() {
+  const docs = getTutorPreVisitDocs();
+  if (!docs.length) {
+    return renderEmptyState("Sin documentacion cargada", "Carga al menos un archivo para habilitar la solicitud de turno comun.");
+  }
+  return `
+    <div class="document-list">
+      ${docs
+        .map(
+          (doc) => `
+            <article class="file-line uploaded-file">
+              <span class="icon">${icons.file}</span>
+              <span>
+                <strong>${doc.name}</strong>
+                <small>${doc.type || "Archivo"} · ${formatFileSize(doc.size)} · ${formatDateLabel(doc.uploadedAt)}</small>
+              </span>
+            </article>
+          `
+        )
+        .join("")}
+    </div>
+  `;
+}
+
+function formatFileSize(size) {
+  const bytes = Number(size) || 0;
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function formatMealFrequency(value) {
+  const count = value?.toString().trim() || "2";
+  const numeric = Number(count);
+  if (Number.isFinite(numeric)) {
+    return `${numeric} comida${numeric === 1 ? "" : "s"}/dia`;
+  }
+  return count;
 }
 
 function buildAppointmentSlots(startHour, endHour, intervalHours = 2) {
@@ -2150,6 +2349,8 @@ function loadPersistentData() {
 
 function initializeRelationalData() {
   store.pets.forEach((pet) => {
+    pet.preVisitDocuments = Array.isArray(pet.preVisitDocuments) ? pet.preVisitDocuments : [];
+    pet.tutorPortalEnabled = Boolean(pet.tutorPortalEnabled);
     if (!store.nutritionPlans.some((plan) => plan.patientId === pet.id)) {
       const planId = crypto.randomUUID();
       store.nutritionPlans.unshift({
@@ -2303,6 +2504,8 @@ function createNewPatient(form) {
     phone: tutor.phone,
     email: tutor.email,
     status: "Pendiente plan",
+    preVisitDocuments: [],
+    tutorPortalEnabled: false,
     documents: [],
     reminders: ["Completar estudios iniciales", "Definir plan nutricional"],
     weights: Number.isFinite(weight) ? [weight] : [],
@@ -2579,6 +2782,53 @@ function handleStageAction(action, stageId) {
   render();
 }
 
+function saveTutorDocuments(form) {
+  const input = form.querySelector('input[type="file"]');
+  const files = Array.from(input?.files || []);
+  if (!files.length) {
+    alert("Selecciona al menos un archivo.");
+    return;
+  }
+  const pet = getTutorPet();
+  pet.preVisitDocuments = Array.isArray(pet.preVisitDocuments) ? pet.preVisitDocuments : [];
+  const newDocs = files.map((file) => ({
+    id: crypto.randomUUID(),
+    name: file.name,
+    type: file.type || file.name.split(".").pop()?.toUpperCase() || "Archivo",
+    size: file.size,
+    uploadedAt: new Date().toISOString(),
+    status: "Cargado",
+  }));
+  pet.preVisitDocuments.push(...newDocs);
+  pet.documents = Array.isArray(pet.documents) ? pet.documents : [];
+  newDocs.forEach((doc) => {
+    if (!pet.documents.includes(doc.name)) {
+      pet.documents.push(doc.name);
+    }
+  });
+  addClinicalHistory(
+    pet.id,
+    "documentacion",
+    newDocs[0].id,
+    "Documentacion preconsulta cargada",
+    `${newDocs.length} archivo(s): ${newDocs.map((doc) => doc.name).join(", ")}`,
+    toDateInput(today)
+  );
+  savePersistentData();
+  alert("Documentacion guardada. Ya podes solicitar un turno comun.");
+  navigateTo("tutor-calendar");
+}
+
+function getTutorLockMessage(id) {
+  if (id === "tutor-calendar") {
+    return "Primero carga la documentacion para habilitar turnos comunes. Las urgencias siguen disponibles.";
+  }
+  if (id === "tutor-pet" || id === "tutor-plan") {
+    return "Esta seccion se habilita despues del turno, cuando la veterinaria active el acceso del tutor.";
+  }
+  return "Seccion no habilitada.";
+}
+
 function bindEvents() {
   document.querySelectorAll("[data-agenda-date]").forEach((select) => {
     select.addEventListener("change", () => {
@@ -2647,6 +2897,10 @@ function bindEvents() {
 
   document.querySelectorAll("[data-view]").forEach((button) => {
     button.addEventListener("click", () => {
+      if (store.activeRole === "tutor" && isTutorModuleLocked(button.dataset.view)) {
+        alert(getTutorLockMessage(button.dataset.view));
+        return;
+      }
       navigateTo(button.dataset.view, {
         selectedPetId: button.dataset.pet,
         patientMode: button.dataset.patientMode || "detail",
@@ -2695,6 +2949,30 @@ function bindEvents() {
     form.addEventListener("submit", (event) => {
       event.preventDefault();
       createNewPatient(form);
+    });
+  });
+
+  document.querySelectorAll("[data-doc-upload-form]").forEach((form) => {
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      saveTutorDocuments(form);
+    });
+  });
+
+  document.querySelectorAll("[data-toggle-tutor-access]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const pet = getPet(button.dataset.toggleTutorAccess);
+      pet.tutorPortalEnabled = !pet.tutorPortalEnabled;
+      addClinicalHistory(
+        pet.id,
+        "vista_tutor",
+        pet.id,
+        pet.tutorPortalEnabled ? "Acceso del tutor habilitado" : "Acceso del tutor deshabilitado",
+        pet.tutorPortalEnabled ? "El tutor puede ver ficha, plan e indicaciones." : "El tutor vuelve a tener acceso limitado.",
+        toDateInput(today)
+      );
+      savePersistentData();
+      render();
     });
   });
 
@@ -2834,6 +3112,11 @@ function bindEvents() {
 
   document.querySelectorAll("[data-book-slot]").forEach((button) => {
     button.addEventListener("click", () => {
+      if (store.activeRole === "tutor" && !hasTutorPreVisitDocs()) {
+        alert("Primero carga la documentacion para habilitar turnos comunes. Las urgencias siguen disponibles.");
+        navigateTo("tutor-docs");
+        return;
+      }
       const [date, time] = button.dataset.bookSlot.split("|");
       const slotTaken = store.appointments.some((item) => item.date === date && item.time === time);
       if (slotTaken) {
