@@ -7,6 +7,7 @@ const store = {
   activeRole: "vet",
   activeView: "home",
   selectedPetId: "mora",
+  activeCalendarDate: "2026-06-06",
   patientDetailOpen: false,
   faqs: [
     {
@@ -49,7 +50,7 @@ const store = {
     {
       id: "apt-1",
       date: "2026-06-06",
-      time: "09:30",
+      time: "09:00",
       kind: "Primera consulta",
       petId: "mora",
       status: "Confirmado",
@@ -65,7 +66,7 @@ const store = {
     {
       id: "apt-3",
       date: "2026-06-07",
-      time: "16:30",
+      time: "17:00",
       kind: "Revision",
       petId: "tango",
       status: "Confirmado",
@@ -198,7 +199,7 @@ const views = [
   { id: "settings", label: "Configuracion", icon: "settings" },
 ];
 
-const appointmentSlots = buildAppointmentSlots(9, 19);
+const appointmentSlots = buildAppointmentSlots(9, 19, 2);
 
 const tutorViews = [
   { id: "tutor-home", label: "Inicio", icon: "home" },
@@ -415,6 +416,25 @@ function renderPatientSelect(name, value = store.selectedPetId) {
       <select name="${name}" data-active-patient>
         ${store.pets
           .map((pet) => `<option value="${pet.id}" ${pet.id === value ? "selected" : ""}>${pet.name} · ${pet.tutor}</option>`)
+          .join("")}
+      </select>
+    </span>
+  `;
+}
+
+function renderDateSelect(days, value, name) {
+  return `
+    <span class="select-wrap compact-select">
+      <select name="${name}" data-agenda-date>
+        ${days
+          .map((day) => {
+            const date = toDateInput(day);
+            return `<option value="${date}" ${date === value ? "selected" : ""}>${day.toLocaleDateString("es-AR", {
+              weekday: "long",
+              day: "2-digit",
+              month: "2-digit",
+            })}</option>`;
+          })
           .join("")}
       </select>
     </span>
@@ -670,8 +690,11 @@ function renderPatientRow(pet) {
 
 function renderCalendar() {
   const weekDays = getWeekDays(today);
+  const selectedDate = getValidCalendarDate(weekDays);
+  const selectedDay = weekDays.find((day) => toDateInput(day) === selectedDate) || weekDays[0];
+  const selectedAppointments = store.appointments.filter((item) => item.date === selectedDate);
   return `
-    <div class="content-grid">
+    <div class="content-grid agenda-compact">
       <section class="panel wide">
         <div class="section-heading">
           <div>
@@ -680,26 +703,30 @@ function renderCalendar() {
           </div>
           <button class="primary-button" data-add-appointment>Nuevo turno</button>
         </div>
-        <div class="calendar-board">
-          ${weekDays
-            .map((day) => {
+        <div class="agenda-picker">
+          <label class="agenda-select">
+            Dia
+            ${renderDateSelect(weekDays, selectedDate, "agenda-date")}
+          </label>
+          <article class="agenda-day-card">
+            <span class="eyebrow">${selectedDay.toLocaleDateString("es-AR", { weekday: "long" })}</span>
+            <h3>${selectedDay.toLocaleDateString("es-AR", { day: "2-digit", month: "long" })}</h3>
+            <p>${selectedAppointments.length} turnos cargados · bloques cada 2 horas</p>
+          </article>
+        </div>
+        <div class="slot-list">
+          ${appointmentSlots
+            .map((slot) => {
+              const apt = getAppointmentAt(selectedDate, slot);
               return `
-                <article class="day-column">
-                  <h3>${day.toLocaleDateString("es-AR", { weekday: "short", day: "2-digit", month: "2-digit" })}</h3>
-                  ${appointmentSlots
-                    .map((slot) => {
-                      const apt = store.appointments.find(
-                        (item) => item.date === toDateInput(day) && item.time === slot
-                      );
-                      return `
-                        <button class="slot ${apt ? "busy" : ""}" data-slot="${toDateInput(day)}|${slot}">
-                          <span>${slot}</span>
-                          <small>${apt ? `${getPet(apt.petId).name} · ${apt.kind}` : "Libre"}</small>
-                        </button>
-                      `;
-                    })
-                    .join("")}
-                </article>
+                <button class="slot-row ${apt ? "busy" : "available"}" data-slot="${selectedDate}|${slot}">
+                  <span class="time">${slot}</span>
+                  <span>
+                    <strong>${apt ? `${getPet(apt.petId).name} · ${apt.kind}` : "Libre"}</strong>
+                    <small>${apt ? apt.status : "Disponible para consulta comun"}</small>
+                  </span>
+                  <span class="badge ${apt ? "" : "soft"}">${apt ? "Ocupado" : "Disponible"}</span>
+                </button>
               `;
             })
             .join("")}
@@ -720,11 +747,12 @@ function renderCalendar() {
 }
 
 function renderTutorCalendar() {
-  const pet = getPet("mora");
-  const petAppointments = store.appointments.filter((item) => item.petId === pet.id);
   const weekDays = getWeekDays(today);
+  const availableDays = getAvailableDays(weekDays);
+  const selectedDate = getValidCalendarDate(availableDays.length ? availableDays : weekDays);
+  const availableSlots = getAvailableSlots(selectedDate);
   return `
-    <div class="content-grid">
+    <div class="content-grid agenda-compact">
       <section class="panel wide">
         <div class="section-heading">
           <div>
@@ -734,45 +762,38 @@ function renderTutorCalendar() {
           <span class="badge">Consulta comun</span>
         </div>
         <p class="muted">Elegi un horario libre para solicitar turno. La veterinaria lo vera como pendiente y podra confirmarlo desde su agenda.</p>
-        <div class="calendar-board tutor-calendar">
-          ${weekDays
-            .map((day) => {
-              const date = toDateInput(day);
-              return `
-                <article class="day-column">
-                  <h3>${day.toLocaleDateString("es-AR", { weekday: "short", day: "2-digit", month: "2-digit" })}</h3>
-                  ${appointmentSlots
-                    .map((slot) => {
-                      const apt = store.appointments.find((item) => item.date === date && item.time === slot);
-                      const mine = apt?.petId === pet.id;
-                      return `
-                        <button class="slot ${apt ? (mine ? "mine" : "busy") : "available"}" ${apt ? "disabled" : ""} data-book-slot="${date}|${slot}">
-                          <span>${slot}</span>
-                          <small>${apt ? (mine ? `${pet.name} · ${apt.status}` : "Ocupado") : "Solicitar"}</small>
-                        </button>
-                      `;
-                    })
-                    .join("")}
-                </article>
-              `;
-            })
-            .join("")}
+        <div class="agenda-picker">
+          <label class="agenda-select">
+            Dia disponible
+            ${renderDateSelect(availableDays.length ? availableDays : weekDays, selectedDate, "agenda-date")}
+          </label>
+          <label class="agenda-select">
+            Horario disponible
+            <span class="select-wrap compact-select">
+              <select data-tutor-slot-date="${selectedDate}">
+                ${availableSlots.length
+                  ? availableSlots.map((slot) => `<option value="${slot}">${slot}</option>`).join("")
+                  : `<option value="">Sin horarios disponibles</option>`}
+              </select>
+            </span>
+          </label>
         </div>
-      </section>
-      <section class="panel">
-        <div class="section-heading">
-          <div>
-            <span class="eyebrow">Mora</span>
-            <h2>Mis turnos</h2>
-          </div>
-        </div>
-        <div class="stack">
-          ${
-            petAppointments.length
-              ? petAppointments.map((item) => renderAppointment(item)).join("")
-              : `<div class="empty-state"><h3>Sin turnos pedidos</h3><p>Cuando solicites uno, va a quedar aca como pendiente.</p></div>`
-          }
-        </div>
+        ${
+          availableSlots.length
+            ? `<div class="slot-actions">
+                ${availableSlots
+                  .map(
+                    (slot) => `
+                      <button class="slot-chip" data-book-slot="${selectedDate}|${slot}">
+                        <span>${slot}</span>
+                        <small>Solicitar</small>
+                      </button>
+                    `
+                  )
+                  .join("")}
+              </div>`
+            : `<div class="empty-state"><h3>Sin horarios libres</h3><p>Elegir otro dia o solicitar una urgencia.</p></div>`
+        }
       </section>
     </div>
   `;
@@ -1216,15 +1237,32 @@ function getPet(id) {
   return store.pets.find((pet) => pet.id === id) || store.pets[0];
 }
 
-function buildAppointmentSlots(startHour, endHour) {
+function buildAppointmentSlots(startHour, endHour, intervalHours = 2) {
   const slots = [];
-  for (let hour = startHour; hour <= endHour; hour += 1) {
+  for (let hour = startHour; hour <= endHour; hour += intervalHours) {
     slots.push(`${String(hour).padStart(2, "0")}:00`);
-    if (hour < endHour) {
-      slots.push(`${String(hour).padStart(2, "0")}:30`);
-    }
   }
   return slots;
+}
+
+function getAppointmentAt(date, slot) {
+  return store.appointments.find((item) => item.date === date && item.time === slot);
+}
+
+function getAvailableSlots(date) {
+  return appointmentSlots.filter((slot) => !getAppointmentAt(date, slot));
+}
+
+function getAvailableDays(days) {
+  return days.filter((day) => getAvailableSlots(toDateInput(day)).length > 0);
+}
+
+function getValidCalendarDate(days) {
+  const dates = days.map((day) => toDateInput(day));
+  if (dates.includes(store.activeCalendarDate)) {
+    return store.activeCalendarDate;
+  }
+  return dates[0] || toDateInput(today);
 }
 
 function formatDate(date) {
@@ -1254,6 +1292,13 @@ function toDateInput(date) {
 }
 
 function bindEvents() {
+  document.querySelectorAll("[data-agenda-date]").forEach((select) => {
+    select.addEventListener("change", () => {
+      store.activeCalendarDate = select.value;
+      render();
+    });
+  });
+
   document.querySelectorAll("[data-active-patient]").forEach((select) => {
     select.addEventListener("change", () => {
       store.selectedPetId = select.value;
@@ -1396,7 +1441,7 @@ function bindEvents() {
       store.appointments.unshift({
         id: crypto.randomUUID(),
         date: "2026-06-05",
-        time: "18:30",
+        time: "19:00",
         kind: "Urgencia habilitada",
         petId: request.petId,
         status: "A confirmar por tutor",
