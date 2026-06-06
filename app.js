@@ -11,6 +11,10 @@ const store = {
   activeCalendarDate: "2026-06-06",
   patientMode: "detail",
   patientDetailOpen: false,
+  followupMode: "view",
+  planMode: "view",
+  editingPlanId: "",
+  editingStageId: "",
   navigationHistory: [],
   tutors: [
     {
@@ -45,6 +49,10 @@ const store = {
     },
   ],
   nutritionPlans: [],
+  nutritionPlanStages: [],
+  followups: [],
+  alerts: [],
+  clinicalHistory: [],
   consultations: [],
   faqs: [
     {
@@ -534,7 +542,7 @@ function renderTopbar() {
         </button>
         <button class="alert-button" data-view="${store.activeRole === "vet" ? "dashboard" : "tutor-home"}">
           <span class="icon">${icons.bell}</span>
-          ${store.urgentRequests.length} alerta
+          ${getActiveAlerts().length} alerta
         </button>
         <span class="status-pill">${pendingDocs} pendiente</span>
       </div>
@@ -595,7 +603,8 @@ function renderTutorView() {
 }
 
 function renderDashboard() {
-  const activePlans = store.pets.filter((pet) => pet.plan.length > 0).length;
+  const activePlans = store.nutritionPlans.filter((plan) => plan.status === "activo").length;
+  const activeAlerts = getActiveAlerts().length;
   return `
     <div class="dashboard-grid">
       ${renderDashboardTabs()}
@@ -610,7 +619,7 @@ function renderDashboard() {
       <section class="metrics">
         ${metric("Pacientes en seguimiento", store.pets.length, "paw", "", "patients")}
         ${metric("Turnos proximos", store.appointments.length, "calendar", "", "calendar")}
-        ${metric("Alertas clinicas", store.urgentRequests.length, "bell", "danger", "alerts")}
+        ${metric("Alertas clinicas", activeAlerts, "bell", "danger", "alerts")}
         ${metric("Planes activos", activePlans, "bowl", "", "plans")}
       </section>
       ${renderMobileEntryGrid(views.filter((item) => item.id !== "dashboard"))}
@@ -622,7 +631,7 @@ function renderDashboard() {
           </div>
           <button class="soft-button" data-view="alerts">Ver alertas</button>
         </div>
-        <div class="stack">${store.urgentRequests.map(renderUrgency).join("")}</div>
+        <div class="stack">${getActiveAlerts().slice(0, 3).map(renderAlertCard).join("") || renderEmptyState("Sin alertas activas", "No hay signos clinicos pendientes para revisar.")}</div>
       </section>
       <section class="panel">
         <div class="section-heading">
@@ -729,6 +738,33 @@ function renderUrgency(item) {
       </div>
     </article>
   `;
+}
+
+function renderAlertCard(alert) {
+  const pet = getPet(alert.patientId || alert.petId);
+  const severity = alert.severity || alert.gravedad || "Media";
+  const status = alert.status || alert.estado || "Activa";
+  const description = alert.description || alert.descripcion || alert.reason || "Revisar evolucion clinica.";
+  const createdAt = alert.createdAt || alert.fecha || "Hoy";
+  return `
+    <article class="alert-card">
+      <div>
+        <span class="badge danger">${severity}</span>
+        <h3>${pet.name} · ${alert.type || alert.tipo || "Alerta clinica"}</h3>
+        <p>${description}</p>
+        <small>${alert.sourceType ? `Origen: ${getSourceLabel(alert.sourceType)}` : status}</small>
+      </div>
+      <div class="card-actions">
+        <small>${formatDateLabel(createdAt)}</small>
+        <button class="soft-button compact" data-view="patients" data-pet="${pet.id}">Ver paciente</button>
+        ${status.toLowerCase() === "activa" ? `<button class="primary-button compact" data-resolve-alert="${alert.id}">Marcar revisada</button>` : ""}
+      </div>
+    </article>
+  `;
+}
+
+function renderEmptyState(title, text) {
+  return `<div class="empty-state"><h3>${title}</h3><p>${text}</p></div>`;
 }
 
 function renderAppointment(item) {
@@ -922,6 +958,7 @@ function renderPatients() {
             <p>${selected.notes}</p>
           </article>
         </div>
+        ${renderClinicalHistory(selected.id)}
         ${renderWeightChart(selected)}
       </section>
     </div>
@@ -1002,15 +1039,25 @@ function renderNewPatientForm() {
           <label>Observaciones del tutor<textarea name="tutorNotes" rows="3"></textarea></label>
         </section>
         <section class="form-section access-section">
-          <h3>Acceso del tutor a la app</h3>
-          <p>La vinculacion queda preparada por tutor_id, email y DNI. Cuando se conecte Supabase Auth, el tutor solo vera los pacientes asociados a su cuenta.</p>
-          <div class="schema-list">
-            <span>tutors.id</span>
-            <span>patients.tutor_id</span>
-            <span>nutrition_plans.patient_id</span>
-            <span>consultations.patient_id</span>
-            <span>appointments.patient_id</span>
-          </div>
+          <h3>Acceso del tutor</h3>
+          <label class="toggle-line">
+            <input name="enableTutorAccess" type="checkbox" checked />
+            <span>Habilitar acceso del tutor a la app</span>
+          </label>
+          <label>Metodo de acceso
+            <select name="accessMethod">
+              <option value="dni">DNI</option>
+              <option value="email">Email</option>
+            </select>
+          </label>
+          <label>Estado del acceso
+            <select name="accessStatus">
+              <option value="pendiente">Pendiente</option>
+              <option value="activo">Activo</option>
+              <option value="deshabilitado">Deshabilitado</option>
+            </select>
+          </label>
+          <button class="soft-button" type="button" data-generate-access>Generar acceso</button>
         </section>
       </div>
       <div class="form-actions">
@@ -1055,96 +1102,449 @@ function renderWeightChart(pet) {
   `;
 }
 
+function renderClinicalHistory(patientId) {
+  const events = store.clinicalHistory
+    .filter((item) => item.patientId === patientId)
+    .slice(0, 6);
+  return `
+    <article class="chart-card clinical-history-card">
+      <div class="section-heading">
+        <div>
+          <span class="eyebrow">Historia clinica</span>
+          <h3>Linea de tiempo</h3>
+        </div>
+      </div>
+      <div class="history-list">
+        ${
+          events.length
+            ? events
+                .map(
+                  (event) => `
+                    <article class="history-item">
+                      <div>
+                        <span class="badge">${getSourceLabel(event.sourceType)}</span>
+                        <h3>${event.title}</h3>
+                        <p>${event.description}</p>
+                      </div>
+                      <small>${formatDateLabel(event.date)}</small>
+                    </article>
+                  `
+                )
+                .join("")
+            : renderEmptyState("Sin eventos", "Los controles, cambios de plan, alertas y turnos quedaran registrados aca.")
+        }
+      </div>
+    </article>
+  `;
+}
+
 function renderPlans() {
   const selected = getPet(store.selectedPetId);
+  if (store.planMode === "new") {
+    return renderNewPlanForm(selected);
+  }
+  if (store.planMode === "stage") {
+    return renderPlanStageForm(selected);
+  }
+  const activePlan = getActivePlan(selected.id);
+  const stages = activePlan ? getPlanStages(activePlan.id) : [];
   return `
-    <div class="content-grid">
+    <div class="content-grid plan-workspace">
       <section class="panel wide">
         <div class="section-heading">
           <div>
-            <span class="eyebrow">Plan a dos meses</span>
+            <span class="eyebrow">Plan alimentario</span>
             <h2>${selected.name}</h2>
           </div>
           <div class="section-actions">
             ${renderPatientSelect("plans-patient", selected.id)}
-            <button class="primary-button" data-add-stage>Agregar etapa</button>
+            <button class="primary-button" data-plan-mode="new">+ Nuevo plan</button>
           </div>
         </div>
-        <div class="timeline">
-          ${
-            selected.plan.length
-              ? selected.plan
-                  .map(
-                    (stage, index) => `
-                      <article class="timeline-item">
-                        <span>${index + 1}</span>
-                        <div>
-                          <h3>${stage.stage}</h3>
-                          <p><strong>${stage.meals}</strong></p>
-                          <p>${stage.detail}</p>
-                        </div>
-                      </article>
-                    `
-                  )
-                  .join("")
-              : `<div class="empty-state"><h3>Plan pendiente</h3><p>Cargar estudios y definir estrategia nutricional antes de activar el plan.</p></div>`
-          }
+        <div class="clinical-facts plan-facts">
+          ${detail("Tutor", selected.tutor)}
+          ${detail("Peso actual", `${selected.weight} kg`)}
+          ${detail("Peso objetivo", `${selected.targetWeight} kg`)}
+          ${detail("Objetivo", selected.nutrition?.goal || activePlan?.objective || "Pendiente")}
+          ${detail("Plan activo", activePlan?.title || "Sin plan activo")}
+          ${detail("Estado", activePlan?.status || "borrador")}
         </div>
+        ${
+          activePlan
+            ? `
+              <article class="plan-summary-card">
+                <div>
+                  <span class="badge">${activePlan.status}</span>
+                  <h3>${activePlan.title}</h3>
+                  <p>${activePlan.observations || activePlan.indications || "Sin observaciones cargadas."}</p>
+                  ${activePlan.lastRecommendation ? `<p><strong>Ultima recomendacion:</strong> ${activePlan.lastRecommendation}</p>` : ""}
+                </div>
+                <button class="soft-button" data-plan-mode="stage">Agregar etapa</button>
+              </article>
+              <div class="stage-grid">
+                ${
+                  stages.length
+                    ? stages.map(renderPlanStageCard).join("")
+                    : renderEmptyState("Sin etapas cargadas", "Agregar una etapa para indicar comidas, gramos, restricciones y criterios de avance.")
+                }
+              </div>
+            `
+            : renderEmptyState("Plan pendiente", "Crear un plan para que las etapas, controles y alertas queden vinculados a este paciente.")
+        }
       </section>
       <section class="panel">
         <div class="section-heading">
           <div>
-            <span class="eyebrow">Ayuda rapida</span>
-            <h2>Plantillas</h2>
+            <span class="eyebrow">Vista tutor</span>
+            <h2>Indicaciones visibles</h2>
           </div>
         </div>
-        <button class="template">Pedido de analisis inicial</button>
-        <button class="template">Transicion alimentaria</button>
-        <button class="template">Control cada 15 dias</button>
-        <button class="template">Conservacion de alimentos</button>
+        ${renderTutorPlanPreview(selected, activePlan, stages)}
       </section>
+    </div>
+  `;
+}
+
+function renderNewPlanForm(selected) {
+  return `
+    <form class="panel wide patient-form" data-new-plan-form>
+      <div class="section-heading">
+        <div>
+          <span class="eyebrow">Nuevo plan</span>
+          <h2>${selected.name}</h2>
+        </div>
+        <button class="ghost-button" type="button" data-plan-mode="view">
+          <span class="icon">${icons.arrow}</span>
+          Volver
+        </button>
+      </div>
+      <div class="form-grid">
+        <section class="form-section">
+          <h3>Datos del plan</h3>
+          <label>Nombre del plan<input name="planTitle" required placeholder="Ej. Transicion BARF controlada" /></label>
+          <label>Fecha de inicio<input name="startDate" type="date" value="${toDateInput(today)}" /></label>
+          <label>Duracion estimada<input name="duration" placeholder="Ej. 60 dias" /></label>
+          <label>Objetivo nutricional
+            <select name="objective">
+              <option>Mantenimiento</option>
+              <option>Descenso de peso</option>
+              <option>Aumento de peso</option>
+              <option>Digestivo</option>
+              <option>Renal</option>
+              <option>Hepatico</option>
+              <option>Dermatologico</option>
+              <option>Transicion alimentaria</option>
+              <option>Otro</option>
+            </select>
+          </label>
+          <label>Estado del plan
+            <select name="status">
+              <option value="borrador">Borrador</option>
+              <option value="activo">Activo</option>
+              <option value="finalizado">Finalizado</option>
+              <option value="suspendido">Suspendido</option>
+            </select>
+          </label>
+          <label>Proximo control sugerido<input name="nextControlDate" type="date" /></label>
+        </section>
+        <section class="form-section">
+          <h3>Observaciones profesionales</h3>
+          <label>Observaciones generales<textarea name="observations" rows="8"></textarea></label>
+          <label class="toggle-line">
+            <input name="createAppointment" type="checkbox" />
+            <span>Sugerir turno de control al guardar</span>
+          </label>
+        </section>
+      </div>
+      <div class="form-actions">
+        <button class="ghost-button" type="button" data-plan-mode="view">Cancelar</button>
+        <button class="primary-button" type="submit">Guardar plan</button>
+      </div>
+    </form>
+  `;
+}
+
+function renderPlanStageForm(selected) {
+  const plan = getActivePlan(selected.id);
+  const editingStage = store.editingStageId ? store.nutritionPlanStages.find((stage) => stage.id === store.editingStageId) : null;
+  if (!plan) {
+    return renderNewPlanForm(selected);
+  }
+  return `
+    <form class="panel wide patient-form" data-stage-form>
+      <div class="section-heading">
+        <div>
+          <span class="eyebrow">${editingStage ? "Editar etapa" : "Nueva etapa"}</span>
+          <h2>${plan.title}</h2>
+        </div>
+        <button class="ghost-button" type="button" data-plan-mode="view">
+          <span class="icon">${icons.arrow}</span>
+          Volver
+        </button>
+      </div>
+      <div class="form-grid">
+        <section class="form-section">
+          <h3>Etapa</h3>
+          <label>Nombre de la etapa<input name="stageName" required value="${editingStage?.name || ""}" placeholder="Ej. Dias 1-15" /></label>
+          <label>Dia desde<input name="dayFrom" type="number" min="1" value="${editingStage?.dayFrom || 1}" /></label>
+          <label>Dia hasta<input name="dayTo" type="number" min="1" value="${editingStage?.dayTo || 15}" /></label>
+          <label>Objetivo de la etapa<textarea name="stageObjective" rows="3">${editingStage?.objective || ""}</textarea></label>
+          <label>Cantidad de comidas diarias<input name="mealCount" value="${editingStage?.mealCount || "2"}" /></label>
+          <label>Estado
+            <select name="stageStatus">
+              ${["pendiente", "activa", "completada", "suspendida"]
+                .map((status) => `<option value="${status}" ${editingStage?.status === status ? "selected" : ""}>${capitalize(status)}</option>`)
+                .join("")}
+            </select>
+          </label>
+        </section>
+        <section class="form-section">
+          <h3>Comidas e indicaciones</h3>
+          <label>Detalle por comida<textarea name="mealDetails" rows="5" placeholder="Desayuno: alimento + gramos + indicacion">${editingStage?.mealDetailsText || ""}</textarea></label>
+          <label>Suplementos<textarea name="supplements" rows="3">${editingStage?.supplements || ""}</textarea></label>
+          <label>Premios permitidos<textarea name="allowedTreats" rows="3">${editingStage?.allowedTreats || ""}</textarea></label>
+          <label>Alimentos prohibidos<textarea name="forbiddenFoods" rows="3">${editingStage?.forbiddenFoods || ""}</textarea></label>
+          <label>Observaciones para el tutor<textarea name="tutorNotes" rows="4">${editingStage?.tutorNotes || ""}</textarea></label>
+        </section>
+        <section class="form-section">
+          <h3>Control y alarmas</h3>
+          <label>Criterio para pasar de etapa<textarea name="transitionCriteria" rows="4">${editingStage?.transitionCriteria || ""}</textarea></label>
+          <label>Proximo control<input name="nextControlDate" type="date" value="${editingStage?.nextControlDate || ""}" /></label>
+          <div class="checkbox-grid">
+            ${["Vomitos", "Diarrea", "Rechazo de alimento", "Perdida rapida de peso", "Decaimiento"]
+              .map((sign) => `<label class="toggle-line"><input type="checkbox" name="alarmSigns" value="${sign}" ${(editingStage?.alarmSigns || []).includes(sign) ? "checked" : ""} /><span>${sign}</span></label>`)
+              .join("")}
+          </div>
+        </section>
+      </div>
+      <div class="form-actions">
+        <button class="ghost-button" type="button" data-plan-mode="view">Cancelar</button>
+        <button class="primary-button" type="submit">${editingStage ? "Guardar cambios" : "Guardar etapa"}</button>
+      </div>
+    </form>
+  `;
+}
+
+function renderPlanStageCard(stage) {
+  return `
+    <article class="stage-card">
+      <div class="stage-card-top">
+        <div>
+          <span class="badge">${stage.status}</span>
+          <h3>${stage.name}</h3>
+          <p>Dias ${stage.dayFrom || "-"} a ${stage.dayTo || "-"}</p>
+        </div>
+        <span class="time">${stage.mealCount || "2"}x</span>
+      </div>
+      <p><strong>Objetivo:</strong> ${stage.objective || "Pendiente"}</p>
+      <p><strong>Comidas:</strong> ${stage.mealDetailsText || "Completar detalle por comida."}</p>
+      <p><strong>Evitar:</strong> ${stage.forbiddenFoods || "Sin restricciones cargadas."}</p>
+      <p><strong>Alarmas:</strong> ${(stage.alarmSigns || []).join(", ") || "Sin alarmas cargadas."}</p>
+      <div class="stage-actions">
+        <button class="soft-button compact" data-stage-action="edit" data-stage-id="${stage.id}">Editar</button>
+        <button class="soft-button compact" data-stage-action="duplicate" data-stage-id="${stage.id}">Duplicar</button>
+        <button class="soft-button compact" data-stage-action="active" data-stage-id="${stage.id}">Activa</button>
+        <button class="soft-button compact" data-stage-action="completed" data-stage-id="${stage.id}">Completada</button>
+        <button class="ghost-button compact" data-stage-action="delete" data-stage-id="${stage.id}">Eliminar</button>
+      </div>
+    </article>
+  `;
+}
+
+function renderTutorPlanPreview(selected, plan, stages) {
+  const activeStage = stages.find((stage) => stage.status === "activa") || stages[0];
+  if (!plan || !activeStage) {
+    return `<p class="muted">Cuando exista un plan activo, el tutor vera aca una version simple: que darle, cuanto, cuando, que evitar y senales de alarma.</p>`;
+  }
+  return `
+    <div class="tutor-plan-preview">
+      <span class="badge">${selected.name}</span>
+      <h3>${activeStage.name}</h3>
+      <p><strong>Que darle:</strong> ${activeStage.mealDetailsText || "Detalle pendiente"}</p>
+      <p><strong>Que evitar:</strong> ${activeStage.forbiddenFoods || "Sin restricciones cargadas."}</p>
+      <p><strong>Indicaciones:</strong> ${activeStage.tutorNotes || "Seguir indicaciones profesionales."}</p>
+      <p><strong>Senales de alarma:</strong> ${(activeStage.alarmSigns || []).join(", ") || "Consultar ante vomitos, diarrea o rechazo de alimento."}</p>
+      <p><strong>Proximo control:</strong> ${activeStage.nextControlDate ? formatDateLabel(activeStage.nextControlDate) : "A definir"}</p>
     </div>
   `;
 }
 
 function renderFollowUp() {
   const selected = getPet(store.selectedPetId);
+  if (store.followupMode === "new") {
+    return renderNewFollowupForm(selected);
+  }
+  const followups = getPatientFollowups(selected.id);
+  const last = followups[0];
+  const previous = followups[1];
+  const variation = last && previous ? Number(last.weight - previous.weight).toFixed(1) : "0.0";
+  const nextControl = getNextControl(selected.id);
+  const patientAlerts = getPatientAlerts(selected.id).filter((alert) => (alert.status || alert.estado || "activa").toLowerCase() === "activa");
   return `
-    <div class="content-grid">
+    <div class="content-grid followup-workspace">
       <section class="panel wide">
         <div class="section-heading">
           <div>
             <span class="eyebrow">Seguimiento</span>
             <h2>${selected.name}</h2>
           </div>
-          ${renderPatientSelect("followup-patient", selected.id)}
+          <div class="section-actions">
+            ${renderPatientSelect("followup-patient", selected.id)}
+            <button class="primary-button" data-followup-mode="new">+ Nuevo control</button>
+          </div>
+        </div>
+        <div class="clinical-facts">
+          ${detail("Peso actual", `${selected.weight} kg`)}
+          ${detail("Peso objetivo", `${selected.targetWeight} kg`)}
+          ${detail("Variacion", `${variation} kg`)}
+          ${detail("Ultimo control", last ? formatDateLabel(last.date) : "Pendiente")}
+          ${detail("Proximo control", nextControl ? formatDateLabel(nextControl.date) : "Sin turno")}
+          ${detail("Estado general", last?.generalStatus || "En progreso")}
         </div>
         ${renderWeightChart(selected)}
       </section>
       <section class="panel">
         <div class="section-heading">
           <div>
-            <span class="eyebrow">Recordatorios</span>
-            <h2>Controles</h2>
+            <span class="eyebrow">Ultimo control</span>
+            <h2>${last ? formatDateLabel(last.date) : "Pendiente"}</h2>
           </div>
         </div>
-        ${selected.reminders.map((item) => `<p class="file-line"><span class="icon">${icons.bell}</span>${item}</p>`).join("")}
+        ${
+          last
+            ? `<div class="followup-card">
+                <p><strong>Peso:</strong> ${last.weight} kg · <strong>Condicion:</strong> ${last.bodyScore || "Pendiente"}</p>
+                <p><strong>Adherencia:</strong> ${last.adherence?.planCompliance || "Pendiente"}</p>
+                <p><strong>Accion:</strong> ${last.professional?.nextAction || "Sin accion cargada"}</p>
+                <p>${last.professional?.clinicalNotes || "Sin observaciones clinicas."}</p>
+              </div>`
+            : `<p class="muted">Todavia no hay controles cargados para este paciente.</p>`
+        }
+      </section>
+      <section class="panel">
+        <div class="section-heading">
+          <div>
+            <span class="eyebrow">Alertas activas</span>
+            <h2>${patientAlerts.length}</h2>
+          </div>
+        </div>
+        <div class="stack">${patientAlerts.map(renderAlertCard).join("") || renderEmptyState("Sin alertas", "No hay alertas clinicas activas para este paciente.")}</div>
+      </section>
+      <section class="panel wide">
+        <div class="section-heading">
+          <div>
+            <span class="eyebrow">Historial de controles</span>
+            <h2>Evolucion</h2>
+          </div>
+        </div>
+        <div class="history-list">
+          ${
+            followups.length
+              ? followups.map(renderFollowupHistoryItem).join("")
+              : renderEmptyState("Sin historial", "Cargar el primer control para empezar a medir evolucion.")
+          }
+        </div>
       </section>
     </div>
   `;
 }
 
+function renderNewFollowupForm(selected) {
+  return `
+    <form class="panel wide patient-form" data-new-followup-form>
+      <div class="section-heading">
+        <div>
+          <span class="eyebrow">Nuevo control</span>
+          <h2>${selected.name}</h2>
+        </div>
+        <button class="ghost-button" type="button" data-followup-mode="view">
+          <span class="icon">${icons.arrow}</span>
+          Volver
+        </button>
+      </div>
+      <div class="form-grid">
+        <section class="form-section">
+          <h3>Datos del control</h3>
+          <label>Fecha del control<input name="date" type="date" value="${toDateInput(today)}" required /></label>
+          <label>Peso actual<input name="weight" type="number" step="0.1" value="${selected.weight}" required /></label>
+          <label>Condicion corporal, escala 1 a 9<input name="bodyScore" type="number" min="1" max="9" value="${parseInt(selected.bodyScore, 10) || ""}" /></label>
+          <label>Perimetro o medida corporal<input name="measure" placeholder="Opcional" /></label>
+          <label>Estado general
+            <select name="generalStatus">
+              <option>En progreso</option>
+              <option>Estable</option>
+              <option>Requiere ajuste</option>
+              <option>Alerta</option>
+            </select>
+          </label>
+          <label>Proximo control<input name="nextControlDate" type="date" /></label>
+        </section>
+        <section class="form-section">
+          <h3>Signos y evolucion</h3>
+          ${renderSelectField("apetite", "Apetito", ["Bajo", "Normal", "Alto"])}
+          ${renderSelectField("water", "Consumo de agua", ["Bajo", "Normal", "Alto"])}
+          ${renderSelectField("stool", "Materia fecal", ["Normal", "Blanda", "Diarrea", "Constipacion"])}
+          ${renderSelectField("vomiting", "Vomitos", ["No", "Si"])}
+          ${renderSelectField("activity", "Actividad", ["Baja", "Normal", "Alta"])}
+          ${renderSelectField("energy", "Energia general", ["Baja", "Normal", "Alta"])}
+          <label>Cambios observados por el tutor<textarea name="tutorChanges" rows="4"></textarea></label>
+        </section>
+        <section class="form-section">
+          <h3>Adherencia al plan</h3>
+          ${renderSelectField("planCompliance", "Cumplimiento del plan", ["Bueno", "Parcial", "Malo"])}
+          ${renderSelectField("mealsRespected", "Comidas respetadas", ["Si", "No", "Parcial"])}
+          <label>Snacks o extras fuera del plan<textarea name="extraSnacks" rows="3"></textarea></label>
+          <label>Dificultades reportadas<textarea name="difficulties" rows="4"></textarea></label>
+        </section>
+        <section class="form-section">
+          <h3>Evaluacion profesional</h3>
+          <label>Observaciones clinicas<textarea name="clinicalNotes" rows="4"></textarea></label>
+          <label>Ajuste recomendado<textarea name="recommendedAdjustment" rows="3"></textarea></label>
+          ${renderSelectField("nextAction", "Proxima accion", ["Mantener plan", "Ajustar gramos", "Cambiar alimento", "Pasar a nueva etapa", "Solicitar estudios", "Agendar nuevo control", "Derivar"])}
+          <div class="checkbox-grid">
+            ${["Perdida rapida de peso", "Aumento de peso", "Diarrea persistente", "Vomitos", "Rechazo de alimento", "Baja adherencia", "Requiere consulta"]
+              .map((alert) => `<label class="toggle-line"><input type="checkbox" name="alerts" value="${alert}" /><span>${alert}</span></label>`)
+              .join("")}
+          </div>
+        </section>
+      </div>
+      <div class="form-actions">
+        <button class="ghost-button" type="button" data-followup-mode="view">Cancelar</button>
+        <button class="primary-button" type="submit">Guardar control</button>
+      </div>
+    </form>
+  `;
+}
+
+function renderFollowupHistoryItem(item) {
+  return `
+    <article class="history-item">
+      <div>
+        <span class="badge">${item.generalStatus || "En progreso"}</span>
+        <h3>${formatDateLabel(item.date)} · ${item.weight} kg</h3>
+        <p>${item.professional?.clinicalNotes || "Sin observaciones clinicas."}</p>
+      </div>
+      <span class="time">${item.bodyScore || "-"}/9</span>
+    </article>
+  `;
+}
+
 function renderAlerts() {
+  const selected = getPet(store.selectedPetId);
+  const alerts = getPatientAlerts(selected.id);
   return `
     <section class="panel wide clinical-alert-panel">
       <div class="section-heading">
         <div>
           <span class="eyebrow">Alertas clinicas</span>
-          <h2>Solicitudes y urgencias</h2>
+          <h2>${selected.name}</h2>
         </div>
-        <button class="soft-button" data-view="calendar">Ver agenda</button>
+        <div class="section-actions">
+          ${renderPatientSelect("alerts-patient", selected.id)}
+          <button class="soft-button" data-view="calendar">Ver agenda</button>
+        </div>
       </div>
-      <div class="stack">${store.urgentRequests.map(renderUrgency).join("")}</div>
+      <div class="stack">${alerts.map(renderAlertCard).join("") || renderEmptyState("Sin alertas", "Este paciente no tiene alertas clinicas activas o pendientes.")}</div>
     </section>
   `;
 }
@@ -1245,6 +1645,8 @@ function integration(name, body, need) {
 
 function renderTutorHome() {
   const pet = getPet("mora");
+  const activePlan = getActivePlan(pet.id);
+  const stages = activePlan ? getPlanStages(activePlan.id) : [];
   return `
     <div class="dashboard-grid">
       <section class="hero-panel tutor-hero">
@@ -1259,7 +1661,7 @@ function renderTutorHome() {
         ${metric("Peso actual", `${pet.weight} kg`, "weight")}
         ${metric("Recordatorios", pet.reminders.length, "bell")}
         ${metric("Documentos", pet.documents.length, "file")}
-        ${metric("Etapas", pet.plan.length, "bowl")}
+        ${metric("Etapas", stages.length, "bowl")}
       </section>
       ${renderMobileEntryGrid(tutorViews.filter((item) => item.id !== "tutor-home"))}
       <section class="panel">
@@ -1365,30 +1767,34 @@ function renderTutorPet() {
 
 function renderTutorPlan() {
   const pet = getPet("mora");
+  const activePlan = getActivePlan(pet.id);
+  const stages = activePlan ? getPlanStages(activePlan.id) : [];
   return `
     <section class="panel wide">
       <div class="section-heading">
         <div>
-          <span class="eyebrow">Plan a dos meses</span>
+          <span class="eyebrow">Plan alimentario</span>
           <h2>${pet.name}</h2>
         </div>
         <span class="badge">Lectura tutor</span>
       </div>
-      <div class="timeline">
-        ${pet.plan
-          .map(
-            (stage, index) => `
-              <article class="timeline-item">
-                <span>${index + 1}</span>
-                <div>
-                  <h3>${stage.stage}</h3>
-                  <p><strong>${stage.meals}</strong></p>
-                  <p>${stage.detail}</p>
-                </div>
-              </article>
-            `
-          )
-          .join("")}
+      <div class="stage-grid tutor-stage-grid">
+        ${
+          stages.length
+            ? stages.map((stage) => `
+                <article class="stage-card">
+                  <span class="badge">${stage.status}</span>
+                  <h3>${stage.name}</h3>
+                  <p><strong>Que darle:</strong> ${stage.mealDetailsText || "Indicacion pendiente."}</p>
+                  <p><strong>Cuando:</strong> ${stage.mealCount || "2"} comidas diarias.</p>
+                  <p><strong>Que evitar:</strong> ${stage.forbiddenFoods || "Sin restricciones cargadas."}</p>
+                  <p><strong>Importante:</strong> ${stage.tutorNotes || "Seguir el plan indicado por la veterinaria."}</p>
+                  <p><strong>Senales de alarma:</strong> ${(stage.alarmSigns || []).join(", ") || "Consultar si aparecen vomitos, diarrea o rechazo de alimento."}</p>
+                  <p><strong>Proximo control:</strong> ${stage.nextControlDate ? formatDateLabel(stage.nextControlDate) : "A definir"}</p>
+                </article>
+              `).join("")
+            : renderEmptyState("Plan pendiente", "La veterinaria todavia no publico un plan alimentario para este paciente.")
+        }
       </div>
     </section>
   `;
@@ -1460,6 +1866,136 @@ function getLastControlLabel(pet) {
   return lastWeight ? `Control ${pet.weights.length} · ${lastWeight} kg` : "Pendiente";
 }
 
+function getActivePlan(patientId) {
+  return (
+    store.nutritionPlans.find((plan) => plan.patientId === patientId && plan.status === "activo") ||
+    store.nutritionPlans.find((plan) => plan.patientId === patientId)
+  );
+}
+
+function getPlanStages(planId) {
+  return store.nutritionPlanStages
+    .filter((stage) => stage.planId === planId)
+    .sort((a, b) => Number(a.dayFrom || 0) - Number(b.dayFrom || 0));
+}
+
+function getPatientFollowups(patientId) {
+  return store.followups
+    .filter((item) => item.patientId === patientId)
+    .sort((a, b) => new Date(b.date || b.createdAt) - new Date(a.date || a.createdAt));
+}
+
+function getPatientAlerts(patientId) {
+  return store.alerts
+    .filter((item) => item.patientId === patientId)
+    .sort((a, b) => new Date(b.createdAt || b.fecha) - new Date(a.createdAt || a.fecha));
+}
+
+function getActiveAlerts() {
+  return store.alerts.filter((item) => (item.status || item.estado || "activa").toLowerCase() === "activa");
+}
+
+function getPatientAppointments(patientId) {
+  return store.appointments
+    .filter((item) => item.petId === patientId || item.patientId === patientId)
+    .sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`));
+}
+
+function getNextControl(patientId) {
+  return getPatientAppointments(patientId).find((item) => item.status !== "Realizado" && item.status !== "Cancelado");
+}
+
+function addClinicalHistory(patientId, sourceType, sourceId, title, description, date = toDateInput(today)) {
+  store.clinicalHistory.unshift({
+    id: crypto.randomUUID(),
+    patientId,
+    sourceType,
+    sourceId,
+    title,
+    description,
+    date,
+    createdAt: new Date().toISOString(),
+  });
+}
+
+function createClinicalAlert({ patientId, sourceType, sourceId, type, severity = "Media", description }) {
+  const alert = {
+    id: crypto.randomUUID(),
+    patientId,
+    sourceType,
+    sourceId,
+    type,
+    severity,
+    status: "activa",
+    description,
+    createdAt: new Date().toISOString(),
+  };
+  store.alerts.unshift(alert);
+  return alert;
+}
+
+function createSuggestedAppointment(patientId, date, kind = "Control nutricional") {
+  if (!date) return null;
+  const pet = getPet(patientId);
+  const appointment = {
+    id: crypto.randomUUID(),
+    patientId,
+    petId: patientId,
+    tutorId: pet.tutorId,
+    date,
+    time: getAvailableSlots(date)[0] || "09:00",
+    kind,
+    status: "Sugerido",
+    createdAt: new Date().toISOString(),
+  };
+  store.appointments.unshift(appointment);
+  return appointment;
+}
+
+function updatePatientWeight(patientId, weight, bodyScore) {
+  const pet = getPet(patientId);
+  if (!Number.isFinite(weight)) return;
+  pet.weight = weight;
+  pet.bodyScore = bodyScore ? `${bodyScore}/9` : pet.bodyScore;
+  pet.weights = Array.isArray(pet.weights) ? pet.weights : [];
+  if (pet.weights[pet.weights.length - 1] !== weight) {
+    pet.weights.push(weight);
+  }
+}
+
+function renderSelectField(name, label, options) {
+  return `
+    <label>${label}
+      <select name="${name}">
+        ${options.map((option) => `<option>${option}</option>`).join("")}
+      </select>
+    </label>
+  `;
+}
+
+function capitalize(value) {
+  const text = value?.toString() || "";
+  return text ? text.slice(0, 1).toUpperCase() + text.slice(1) : "";
+}
+
+function formatDateLabel(value) {
+  if (!value) return "Pendiente";
+  if (value.includes("Hoy") || value.includes("Ahora")) return value;
+  if (!/^\d{4}-\d{2}-\d{2}/.test(value)) return value;
+  return formatDate(value.slice(0, 10));
+}
+
+function getSourceLabel(value) {
+  const labels = {
+    seguimiento: "Seguimiento",
+    plan_alimentario: "Plan alimentario",
+    turno: "Turno",
+    urgencia: "Urgencia",
+    carga_manual: "Carga manual",
+  };
+  return labels[value] || value;
+}
+
 function getAvailableSlots(date) {
   return appointmentSlots.filter((slot) => !getAppointmentAt(date, slot));
 }
@@ -1508,6 +2044,10 @@ function getNavigationSnapshot() {
     selectedPetId: store.selectedPetId,
     patientMode: store.patientMode,
     patientDetailOpen: store.patientDetailOpen,
+    followupMode: store.followupMode,
+    planMode: store.planMode,
+    editingPlanId: store.editingPlanId,
+    editingStageId: store.editingStageId,
     activeCalendarDate: store.activeCalendarDate,
   };
 }
@@ -1517,6 +2057,10 @@ function restoreNavigationSnapshot(snapshot) {
   store.selectedPetId = snapshot.selectedPetId || store.selectedPetId;
   store.patientMode = snapshot.patientMode || "detail";
   store.patientDetailOpen = Boolean(snapshot.patientDetailOpen);
+  store.followupMode = snapshot.followupMode || "view";
+  store.planMode = snapshot.planMode || "view";
+  store.editingPlanId = snapshot.editingPlanId || "";
+  store.editingStageId = snapshot.editingStageId || "";
   store.activeCalendarDate = snapshot.activeCalendarDate || store.activeCalendarDate;
 }
 
@@ -1525,6 +2069,10 @@ function navigateTo(view, options = {}) {
     ...getNavigationSnapshot(),
     activeView: view,
     patientMode: options.patientMode || (view === "patients" ? "detail" : store.patientMode),
+    followupMode: options.followupMode || (view === "followup" ? "view" : store.followupMode),
+    planMode: options.planMode || (view === "plans" ? "view" : store.planMode),
+    editingPlanId: options.editingPlanId || "",
+    editingStageId: options.editingStageId || "",
     patientDetailOpen: Boolean(options.patientDetailOpen),
   };
   if (options.selectedPetId) {
@@ -1556,6 +2104,10 @@ function savePersistentData() {
     tutors: store.tutors,
     pets: store.pets,
     nutritionPlans: store.nutritionPlans,
+    nutritionPlanStages: store.nutritionPlanStages,
+    followups: store.followups,
+    alerts: store.alerts,
+    clinicalHistory: store.clinicalHistory,
     consultations: store.consultations,
     appointments: store.appointments,
     urgentRequests: store.urgentRequests,
@@ -1570,7 +2122,20 @@ function loadPersistentData() {
   if (!raw) return;
   try {
     const data = JSON.parse(raw);
-    ["tutors", "pets", "nutritionPlans", "consultations", "appointments", "urgentRequests", "foods", "faqs"].forEach((key) => {
+    [
+      "tutors",
+      "pets",
+      "nutritionPlans",
+      "nutritionPlanStages",
+      "followups",
+      "alerts",
+      "clinicalHistory",
+      "consultations",
+      "appointments",
+      "urgentRequests",
+      "foods",
+      "faqs",
+    ].forEach((key) => {
       if (Array.isArray(data[key])) {
         store[key] = data[key];
       }
@@ -1581,6 +2146,81 @@ function loadPersistentData() {
   } catch {
     localStorage.removeItem(STORAGE_KEY);
   }
+}
+
+function initializeRelationalData() {
+  store.pets.forEach((pet) => {
+    if (!store.nutritionPlans.some((plan) => plan.patientId === pet.id)) {
+      const planId = crypto.randomUUID();
+      store.nutritionPlans.unshift({
+        id: planId,
+        patientId: pet.id,
+        title: pet.plan?.length ? `Plan nutricional de ${pet.name}` : "Plan nutricional pendiente",
+        objective: pet.nutrition?.goal || (pet.plan?.length ? "Transicion alimentaria" : "Definir objetivo"),
+        startDate: toDateInput(today),
+        estimatedDuration: "60 dias",
+        status: pet.plan?.length ? "activo" : "borrador",
+        observations: pet.notes || "",
+        tutorVisible: true,
+        createdAt: new Date().toISOString(),
+      });
+      (pet.plan || []).forEach((stage, index) => {
+        store.nutritionPlanStages.push({
+          id: crypto.randomUUID(),
+          planId,
+          patientId: pet.id,
+          name: stage.stage || `Etapa ${index + 1}`,
+          dayFrom: index * 15 + 1,
+          dayTo: index === 0 ? 15 : index === 1 ? 35 : 60,
+          objective: stage.detail || "",
+          mealCount: stage.meals?.match(/\d+/)?.[0] || "2",
+          mealDetailsText: stage.detail || "",
+          supplements: "",
+          allowedTreats: "",
+          forbiddenFoods: pet.nutrition?.restrictedFoods || "",
+          tutorNotes: stage.detail || "",
+          transitionCriteria: "Revisar tolerancia digestiva, peso y adherencia antes de avanzar.",
+          alarmSigns: ["Vomitos", "Diarrea", "Rechazo de alimento"],
+          nextControlDate: "",
+          status: index === 0 ? "activa" : "pendiente",
+          createdAt: new Date().toISOString(),
+        });
+      });
+    }
+    if (!store.followups.some((item) => item.patientId === pet.id) && Array.isArray(pet.weights) && pet.weights.length) {
+      const lastWeight = pet.weights[pet.weights.length - 1];
+      store.followups.unshift({
+        id: crypto.randomUUID(),
+        patientId: pet.id,
+        date: toDateInput(today),
+        weight: lastWeight,
+        bodyScore: parseInt(pet.bodyScore, 10) || "",
+        measure: "",
+        generalStatus: pet.status?.includes("Urgencia") ? "Alerta" : "En progreso",
+        signs: {},
+        adherence: { planCompliance: "Pendiente" },
+        professional: { nextAction: "Mantener plan", clinicalNotes: pet.notes || "" },
+        alerts: [],
+        createdAt: new Date().toISOString(),
+      });
+    }
+  });
+
+  store.urgentRequests.forEach((request) => {
+    const alreadyMigrated = store.alerts.some((alert) => alert.sourceId === request.id);
+    if (alreadyMigrated) return;
+    store.alerts.unshift({
+      id: crypto.randomUUID(),
+      patientId: request.petId,
+      sourceType: "urgencia",
+      sourceId: request.id,
+      type: "Solicitud de urgencia",
+      severity: request.severity || "Media",
+      status: request.status === "Resuelta" ? "revisada" : "activa",
+      description: request.reason,
+      createdAt: new Date().toISOString(),
+    });
+  });
 }
 
 function getRequiredText(data, key) {
@@ -1625,9 +2265,20 @@ function createNewPatient(form) {
       address: getRequiredText(data, "tutorAddress") || "Pendiente",
       relationship: getRequiredText(data, "relationship") || "Tutor principal",
       notes: getRequiredText(data, "tutorNotes"),
+      access: {
+        enabled: data.get("enableTutorAccess") === "on",
+        method: getRequiredText(data, "accessMethod") || "dni",
+        status: getRequiredText(data, "accessStatus") || "pendiente",
+      },
       createdAt: new Date().toISOString(),
     };
     store.tutors.push(tutor);
+  } else {
+    tutor.access = {
+      enabled: data.get("enableTutorAccess") === "on",
+      method: getRequiredText(data, "accessMethod") || tutor.access?.method || "dni",
+      status: getRequiredText(data, "accessStatus") || tutor.access?.status || "pendiente",
+    };
   }
 
   const pet = {
@@ -1680,10 +2331,10 @@ function createNewPatient(form) {
     snack: "",
     dinner: "",
     indications: "Completar luego de revisar estudios y primera consulta.",
-    status: "inactivo",
+    status: "borrador",
     createdAt: new Date().toISOString(),
   });
-  store.consultations.unshift({
+  const consultation = {
     id: crypto.randomUUID(),
     patientId: pet.id,
     date: toDateInput(today),
@@ -1692,12 +2343,239 @@ function createNewPatient(form) {
     indications: "Pendiente evaluacion profesional.",
     observations: pet.notes,
     createdAt: new Date().toISOString(),
-  });
+  };
+  store.consultations.unshift(consultation);
+  addClinicalHistory(pet.id, "paciente", pet.id, "Alta de paciente", `Paciente vinculado a ${pet.tutor}.`, toDateInput(today));
+  addClinicalHistory(pet.id, "consulta", consultation.id, "Consulta inicial pendiente", consultation.indications, consultation.date);
 
   store.selectedPetId = pet.id;
   store.patientMode = "detail";
   savePersistentData();
   alert("Paciente guardado y vinculado al tutor.");
+  render();
+}
+
+function createFollowup(form) {
+  const data = new FormData(form);
+  const patientId = store.selectedPetId;
+  const weight = Number(getRequiredText(data, "weight"));
+  const bodyScore = getRequiredText(data, "bodyScore");
+  const date = getRequiredText(data, "date") || toDateInput(today);
+  if (!Number.isFinite(weight)) {
+    alert("Completá el peso actual del control.");
+    return;
+  }
+  const selectedAlerts = data.getAll("alerts").map((item) => item.toString());
+  const signs = {
+    apetite: getRequiredText(data, "apetite"),
+    water: getRequiredText(data, "water"),
+    stool: getRequiredText(data, "stool"),
+    vomiting: getRequiredText(data, "vomiting"),
+    activity: getRequiredText(data, "activity"),
+    energy: getRequiredText(data, "energy"),
+    tutorChanges: getRequiredText(data, "tutorChanges"),
+  };
+  const followup = {
+    id: crypto.randomUUID(),
+    patientId,
+    date,
+    weight,
+    bodyScore,
+    measure: getRequiredText(data, "measure"),
+    generalStatus: getRequiredText(data, "generalStatus"),
+    signs,
+    adherence: {
+      planCompliance: getRequiredText(data, "planCompliance"),
+      mealsRespected: getRequiredText(data, "mealsRespected"),
+      extraSnacks: getRequiredText(data, "extraSnacks"),
+      difficulties: getRequiredText(data, "difficulties"),
+    },
+    professional: {
+      clinicalNotes: getRequiredText(data, "clinicalNotes"),
+      recommendedAdjustment: getRequiredText(data, "recommendedAdjustment"),
+      nextAction: getRequiredText(data, "nextAction"),
+    },
+    alerts: selectedAlerts,
+    nextControlDate: getRequiredText(data, "nextControlDate"),
+    createdAt: new Date().toISOString(),
+  };
+  store.followups.unshift(followup);
+  updatePatientWeight(patientId, weight, bodyScore);
+
+  const automaticAlerts = [];
+  if (signs.stool === "Diarrea") automaticAlerts.push("Diarrea persistente");
+  if (signs.vomiting === "Si") automaticAlerts.push("Vomitos");
+  if (followup.adherence.planCompliance === "Malo") automaticAlerts.push("Baja adherencia");
+  [...new Set([...selectedAlerts, ...automaticAlerts])].forEach((type) => {
+    createClinicalAlert({
+      patientId,
+      sourceType: "seguimiento",
+      sourceId: followup.id,
+      type,
+      severity: ["Vomitos", "Diarrea persistente", "Perdida rapida de peso", "Requiere consulta"].includes(type) ? "Alta" : "Media",
+      description: `Alerta generada desde control de seguimiento del ${formatDateLabel(date)}.`,
+    });
+  });
+
+  const plan = getActivePlan(patientId);
+  if (plan && followup.professional.nextAction) {
+    plan.lastRecommendation = followup.professional.nextAction;
+    plan.lastRecommendationSourceId = followup.id;
+  }
+  if (followup.nextControlDate) {
+    createSuggestedAppointment(patientId, followup.nextControlDate, "Control nutricional");
+  }
+  addClinicalHistory(
+    patientId,
+    "seguimiento",
+    followup.id,
+    "Control de seguimiento",
+    `${weight} kg · ${followup.generalStatus}. ${followup.professional.nextAction || ""}`,
+    date
+  );
+  store.followupMode = "view";
+  savePersistentData();
+  alert("Control guardado y vinculado al paciente.");
+  render();
+}
+
+function createPlan(form) {
+  const data = new FormData(form);
+  const patientId = store.selectedPetId;
+  const title = getRequiredText(data, "planTitle");
+  if (!title) {
+    alert("Completá el nombre del plan.");
+    return;
+  }
+  store.nutritionPlans
+    .filter((plan) => plan.patientId === patientId)
+    .forEach((plan) => {
+      if (getRequiredText(data, "status") === "activo") plan.status = "borrador";
+    });
+  const plan = {
+    id: crypto.randomUUID(),
+    patientId,
+    title,
+    startDate: getRequiredText(data, "startDate") || toDateInput(today),
+    estimatedDuration: getRequiredText(data, "duration") || "60 dias",
+    objective: getRequiredText(data, "objective"),
+    status: getRequiredText(data, "status") || "borrador",
+    observations: getRequiredText(data, "observations"),
+    tutorVisible: true,
+    createdAt: new Date().toISOString(),
+  };
+  store.nutritionPlans.unshift(plan);
+  const pet = getPet(patientId);
+  pet.status = plan.status === "activo" ? "Plan activo" : "Plan en borrador";
+  const nextControlDate = getRequiredText(data, "nextControlDate");
+  if (data.get("createAppointment") === "on" && nextControlDate) {
+    createSuggestedAppointment(patientId, nextControlDate, "Control de plan alimentario");
+  }
+  addClinicalHistory(patientId, "plan_alimentario", plan.id, "Nuevo plan alimentario", `${title} · ${plan.objective}`, plan.startDate);
+  store.planMode = "view";
+  savePersistentData();
+  alert("Plan guardado y vinculado al paciente.");
+  render();
+}
+
+function savePlanStage(form) {
+  const data = new FormData(form);
+  const patientId = store.selectedPetId;
+  const plan = getActivePlan(patientId);
+  if (!plan) return;
+  const stageData = {
+    planId: plan.id,
+    patientId,
+    name: getRequiredText(data, "stageName"),
+    dayFrom: Number(getRequiredText(data, "dayFrom")) || 1,
+    dayTo: Number(getRequiredText(data, "dayTo")) || 15,
+    objective: getRequiredText(data, "stageObjective"),
+    mealCount: getRequiredText(data, "mealCount"),
+    mealDetailsText: getRequiredText(data, "mealDetails"),
+    supplements: getRequiredText(data, "supplements"),
+    allowedTreats: getRequiredText(data, "allowedTreats"),
+    forbiddenFoods: getRequiredText(data, "forbiddenFoods"),
+    tutorNotes: getRequiredText(data, "tutorNotes"),
+    transitionCriteria: getRequiredText(data, "transitionCriteria"),
+    alarmSigns: data.getAll("alarmSigns").map((item) => item.toString()),
+    nextControlDate: getRequiredText(data, "nextControlDate"),
+    status: getRequiredText(data, "stageStatus") || "pendiente",
+  };
+  if (!stageData.name) {
+    alert("Completá el nombre de la etapa.");
+    return;
+  }
+  if (stageData.status === "activa") {
+    store.nutritionPlanStages
+      .filter((stage) => stage.planId === plan.id)
+      .forEach((stage) => {
+        stage.status = "pendiente";
+      });
+  }
+  let stage = store.nutritionPlanStages.find((item) => item.id === store.editingStageId);
+  if (stage) {
+    Object.assign(stage, stageData, { updatedAt: new Date().toISOString() });
+  } else {
+    stage = {
+      id: crypto.randomUUID(),
+      ...stageData,
+      createdAt: new Date().toISOString(),
+    };
+    store.nutritionPlanStages.push(stage);
+  }
+  if (stage.alarmSigns.length) {
+    createClinicalAlert({
+      patientId,
+      sourceType: "plan_alimentario",
+      sourceId: stage.id,
+      type: "Senales de alarma en plan",
+      severity: "Media",
+      description: `Etapa ${stage.name}: ${stage.alarmSigns.join(", ")}.`,
+    });
+  }
+  if (stage.nextControlDate) {
+    createSuggestedAppointment(patientId, stage.nextControlDate, "Control al finalizar etapa");
+  }
+  addClinicalHistory(patientId, "plan_alimentario", stage.id, stageData.status === "activa" ? "Etapa activa" : "Etapa de plan actualizada", stage.name, toDateInput(today));
+  store.planMode = "view";
+  store.editingStageId = "";
+  savePersistentData();
+  alert("Etapa guardada.");
+  render();
+}
+
+function handleStageAction(action, stageId) {
+  const stage = store.nutritionPlanStages.find((item) => item.id === stageId);
+  if (!stage) return;
+  if (action === "edit") {
+    navigateTo("plans", { planMode: "stage", editingStageId: stage.id });
+    return;
+  }
+  if (action === "delete") {
+    if (!confirm("Eliminar esta etapa del plan?")) return;
+    store.nutritionPlanStages = store.nutritionPlanStages.filter((item) => item.id !== stage.id);
+  }
+  if (action === "duplicate") {
+    store.nutritionPlanStages.push({
+      ...stage,
+      id: crypto.randomUUID(),
+      name: `${stage.name} copia`,
+      status: "pendiente",
+      createdAt: new Date().toISOString(),
+    });
+  }
+  if (action === "active") {
+    store.nutritionPlanStages
+      .filter((item) => item.planId === stage.planId)
+      .forEach((item) => {
+        item.status = item.id === stage.id ? "activa" : "pendiente";
+      });
+  }
+  if (action === "completed") {
+    stage.status = "completada";
+  }
+  addClinicalHistory(stage.patientId, "plan_alimentario", stage.id, "Etapa de plan actualizada", `${stage.name} · ${action}`, toDateInput(today));
+  savePersistentData();
   render();
 }
 
@@ -1715,6 +2593,9 @@ function bindEvents() {
       if (store.activeView === "patients") {
         store.patientDetailOpen = true;
       }
+      store.followupMode = "view";
+      store.planMode = "view";
+      store.editingStageId = "";
       render();
     });
   });
@@ -1817,6 +2698,72 @@ function bindEvents() {
     });
   });
 
+  document.querySelectorAll("[data-generate-access]").forEach((button) => {
+    button.addEventListener("click", () => {
+      alert("Acceso preparado. Cuando se conecte Supabase, esto enviara la invitacion al tutor.");
+    });
+  });
+
+  document.querySelectorAll("[data-followup-mode]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const mode = button.dataset.followupMode;
+      if (mode === "new") {
+        navigateTo("followup", { followupMode: "new" });
+      } else {
+        goBack();
+      }
+    });
+  });
+
+  document.querySelectorAll("[data-new-followup-form]").forEach((form) => {
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      createFollowup(form);
+    });
+  });
+
+  document.querySelectorAll("[data-plan-mode]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const mode = button.dataset.planMode;
+      if (mode === "new" || mode === "stage") {
+        navigateTo("plans", { planMode: mode, editingStageId: "" });
+      } else {
+        goBack();
+      }
+    });
+  });
+
+  document.querySelectorAll("[data-new-plan-form]").forEach((form) => {
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      createPlan(form);
+    });
+  });
+
+  document.querySelectorAll("[data-stage-form]").forEach((form) => {
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      savePlanStage(form);
+    });
+  });
+
+  document.querySelectorAll("[data-stage-action]").forEach((button) => {
+    button.addEventListener("click", () => {
+      handleStageAction(button.dataset.stageAction, button.dataset.stageId);
+    });
+  });
+
+  document.querySelectorAll("[data-resolve-alert]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const alertItem = store.alerts.find((item) => item.id === button.dataset.resolveAlert);
+      if (!alertItem) return;
+      alertItem.status = "revisada";
+      addClinicalHistory(alertItem.patientId, "alerta", alertItem.id, "Alerta revisada", alertItem.type || "Alerta clinica", toDateInput(today));
+      savePersistentData();
+      render();
+    });
+  });
+
   document.querySelectorAll("[data-add-faq]").forEach((button) => {
     button.addEventListener("click", () => {
       const question = prompt("Nueva pregunta frecuente");
@@ -1867,12 +2814,16 @@ function bindEvents() {
       const request = store.urgentRequests.find((item) => item.id === button.dataset.approveUrgent);
       if (!request) return;
       request.status = "Turno habilitado";
+      const linkedAlert = store.alerts.find((item) => item.sourceId === request.id);
+      if (linkedAlert) linkedAlert.status = "revisada";
       store.appointments.unshift({
         id: crypto.randomUUID(),
         date: "2026-06-05",
         time: "19:00",
         kind: "Urgencia habilitada",
         petId: request.petId,
+        patientId: request.petId,
+        tutorId: getPet(request.petId).tutorId,
         status: "A confirmar por tutor",
       });
       savePersistentData();
@@ -1896,6 +2847,8 @@ function bindEvents() {
         time,
         kind: "Consulta solicitada",
         petId: "mora",
+        patientId: "mora",
+        tutorId: getPet("mora").tutorId,
         status: "Pendiente",
       });
       savePersistentData();
@@ -1928,6 +2881,15 @@ function bindEvents() {
         createdAt: "Ahora",
         severity: data.get("severity"),
       });
+      const request = store.urgentRequests[0];
+      createClinicalAlert({
+        patientId: request.petId,
+        sourceType: "urgencia",
+        sourceId: request.id,
+        type: "Solicitud de urgencia",
+        severity: request.severity,
+        description: reason,
+      });
       savePersistentData();
       alert("La alerta fue enviada a la veterinaria.");
       store.activeRole = "vet";
@@ -1942,4 +2904,6 @@ if ("serviceWorker" in navigator) {
 }
 
 loadPersistentData();
+initializeRelationalData();
+savePersistentData();
 render();
