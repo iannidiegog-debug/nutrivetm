@@ -1,5 +1,5 @@
 export const appConfig = {
-  appName: "NutriVetM",
+  appName: "NutriM-Vet",
   clinicName: "Melanie",
   contact: {
     phone: "",
@@ -29,7 +29,7 @@ export const appConfig = {
   },
   email: {
     provider: "resend-recommended",
-    senderName: "NutriVetM",
+    senderName: "NutriM-Vet",
     senderEmail: "",
   },
 };
