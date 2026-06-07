@@ -50,6 +50,11 @@ const store = {
   ],
   nutritionPlans: [],
   nutritionPlanStages: [],
+  ingredientLibrary: [],
+  adviceLibrary: [],
+  supplementLibrary: [],
+  cookingLibrary: [],
+  tutorMessageLibrary: [],
   followups: [],
   alerts: [],
   clinicalHistory: [],
@@ -248,6 +253,64 @@ const views = [
 ];
 
 const appointmentSlots = buildAppointmentSlots(9, 19, 2);
+
+const planAdviceTemplates = [
+  "Incorporar de a un ingrediente a la vez, en pequenas proporciones.",
+  "Ofrecer cada ingrediente por al menos 3 dias para evaluar tolerancia.",
+  "Observar materia fecal, vomitos, apetito y conducta.",
+  "Ofrecer la racion tibia a natural, ni fria ni caliente.",
+  "Usar balanza y verificar que pese correctamente.",
+  "Preparar viandas para freezer y descongelar en heladera.",
+  "Agregar suplementos antes de ofrecer, cuando corresponda.",
+];
+
+const ingredientTemplates = [
+  { name: "Cerdo", category: "Carnes", unit: "gramos", cooking: "Plancha u horno" },
+  { name: "Solomillo", category: "Carnes", unit: "gramos", cooking: "Plancha u horno" },
+  { name: "Carre", category: "Carnes", unit: "gramos", cooking: "Plancha u horno" },
+  { name: "Bondiola", category: "Carnes", unit: "gramos", cooking: "Plancha u horno" },
+  { name: "Chuleta", category: "Carnes", unit: "gramos", cooking: "Plancha u horno" },
+  { name: "Costillita", category: "Carnes", unit: "gramos", cooking: "Plancha u horno" },
+  { name: "Corazon de cerdo", category: "Otras carnes / visceras", unit: "gramos", cooking: "Bien cocido" },
+  { name: "Zanahoria", category: "Verduras", unit: "gramos", cooking: "Vapor o hervida" },
+  { name: "Calabaza", category: "Verduras", unit: "gramos", cooking: "Vapor o hervida" },
+  { name: "Batata", category: "Verduras", unit: "gramos", cooking: "Vapor o hervida" },
+  { name: "Manzana roja", category: "Frutas", unit: "gramos", cooking: "Cruda o cocida segun tolerancia" },
+  { name: "Manzana verde", category: "Frutas", unit: "gramos", cooking: "Cruda o cocida segun tolerancia" },
+  { name: "Aceite de coco", category: "Grasas", unit: "cucharadita", cooking: "Crudo" },
+  { name: "Aceite de oliva extra virgen", category: "Grasas", unit: "cucharadita", cooking: "Crudo" },
+  { name: "Sopa moro", category: "Otros", unit: "gramos", cooking: "Preparacion indicada" },
+  { name: "Gastrointestinal / balanceado gastrointestinal", category: "Otros", unit: "gramos", cooking: "Listo para servir" },
+  { name: "Ricota", category: "Lacteos / fermentados", unit: "gramos", cooking: "Sin coccion" },
+  { name: "Huevo", category: "Otros", unit: "unidad", cooking: "Duro, poche o semi cocido" },
+  { name: "Yogurt natural", category: "Lacteos / fermentados", unit: "cucharada", cooking: "Sin coccion" },
+];
+
+const cookingTemplates = [
+  "Carnes a la plancha o al horno, no mas de 15 minutos.",
+  "Sellar vuelta y vuelta.",
+  "Verduras al vapor o hervidas.",
+  "Las grasas siempre van crudas.",
+  "Descongelar siempre en heladera.",
+  "Agregar suplementos antes de ofrecer.",
+];
+
+const supplementTemplates = [
+  { name: "Omega 3", indication: "Pinchar capsula y colocar el contenido en la comida. Guardar en heladera al abrigo de la luz." },
+  { name: "Huevo", indication: "Duro, poche o semi cocido." },
+  { name: "Yogurt natural", indication: "Puede aportar probioticos y mejorar salud intestinal." },
+  { name: "Calcio", indication: "Indicar dosis diaria segun criterio profesional." },
+  { name: "Glutamina", indication: "Indicar dosis diaria segun criterio profesional." },
+  { name: "Aceite de oliva/coco", indication: "Usar crudo y alternar segun tolerancia." },
+];
+
+const tutorMessageTemplates = [
+  "Tal como hablamos en la consulta, empezamos con una transicion progresiva para evaluar tolerancia digestiva.",
+  "En lo posible, enviar fotos y peso en 2 semanas para revisar evolucion.",
+  "Comentar como hace la materia fecal, si presenta vomitos, apetito bajo o rechazo de alimento.",
+  "Si presenta diarrea o intolerancia, pausar el ultimo ingrediente incorporado y escribir para revisar indicaciones.",
+  "Nos volvemos a ver en el proximo control para ajustar cantidades y avanzar de etapa.",
+];
 
 const tutorViews = [
   { id: "tutor-home", label: "Inicio", icon: "home" },
@@ -1162,6 +1225,27 @@ function renderClinicalHistory(patientId) {
   `;
 }
 
+function renderPlanSectionPreview(plan) {
+  return `
+    <div class="plan-section-preview">
+      ${plan.advice?.length ? previewBlock("Consejos", plan.advice.slice(0, 3).join(" · ")) : ""}
+      ${plan.ingredients?.length ? previewBlock("Ingredientes", plan.ingredients.slice(0, 6).map((item) => item.name).join(", ")) : ""}
+      ${plan.dailyRation?.total || plan.dailyRation?.details ? previewBlock("Racion diaria", `${plan.dailyRation?.total || "Total a definir"} · ${plan.dailyRation?.details || ""}`) : ""}
+      ${plan.supplements?.length ? previewBlock("Suplementacion", plan.supplements.map((item) => item.name).join(", ")) : ""}
+      ${plan.tutorMessage ? previewBlock("Mensaje tutor", plan.tutorMessage.slice(0, 180)) : ""}
+    </div>
+  `;
+}
+
+function previewBlock(title, text) {
+  return `
+    <article class="preview-block">
+      <span class="eyebrow">${title}</span>
+      <p>${text}</p>
+    </article>
+  `;
+}
+
 function renderPlans() {
   const selected = getPet(store.selectedPetId);
   if (store.planMode === "new") {
@@ -1200,11 +1284,17 @@ function renderPlans() {
                 <div>
                   <span class="badge">${activePlan.status}</span>
                   <h3>${activePlan.title}</h3>
+                  <p>${activePlan.objective || "Objetivo pendiente"} · ${activePlan.planType || "Tipo pendiente"} · ${activePlan.estimatedDuration || "Duracion a definir"}</p>
                   <p>${activePlan.observations || activePlan.indications || "Sin observaciones cargadas."}</p>
                   ${activePlan.lastRecommendation ? `<p><strong>Ultima recomendacion:</strong> ${activePlan.lastRecommendation}</p>` : ""}
                 </div>
-                <button class="soft-button" data-plan-mode="stage">Agregar etapa</button>
+                <div class="stage-actions">
+                  <button class="soft-button compact" data-edit-plan="${activePlan.id}">Editar plan</button>
+                  <button class="soft-button compact" data-plan-mode="stage">Agregar etapa</button>
+                  <button class="primary-button compact" data-export-plan="${activePlan.id}">Exportar PDF</button>
+                </div>
               </article>
+              ${renderPlanSectionPreview(activePlan)}
               <div class="stage-grid">
                 ${
                   stages.length
@@ -1230,11 +1320,22 @@ function renderPlans() {
 }
 
 function renderNewPlanForm(selected) {
+  const editingPlan = store.editingPlanId ? store.nutritionPlans.find((plan) => plan.id === store.editingPlanId) : null;
+  const adviceOptions = store.adviceLibrary.length ? store.adviceLibrary.map((item) => item.text) : planAdviceTemplates;
+  const ingredientOptions = store.ingredientLibrary.length ? store.ingredientLibrary : ingredientTemplates;
+  const supplementOptions = store.supplementLibrary.length ? store.supplementLibrary : supplementTemplates;
+  const cookingOptions = store.cookingLibrary.length ? store.cookingLibrary.map((item) => item.text) : cookingTemplates;
+  const messageOptions = store.tutorMessageLibrary.length ? store.tutorMessageLibrary.map((item) => item.text) : tutorMessageTemplates;
+  const selectedAdvice = editingPlan?.advice?.length ? editingPlan.advice : adviceOptions;
+  const selectedIngredients = editingPlan?.ingredients?.length ? editingPlan.ingredients : ingredientOptions.slice(0, 10);
+  const selectedSupplements = editingPlan?.supplements?.length ? editingPlan.supplements : supplementOptions.slice(0, 4);
+  const cookingNotes = editingPlan?.cookingNotes?.length ? editingPlan.cookingNotes.join("\n") : cookingOptions.join("\n");
+  const tutorMessage = editingPlan?.tutorMessage || messageOptions.join("\n");
   return `
     <form class="panel wide patient-form" data-new-plan-form>
       <div class="section-heading">
         <div>
-          <span class="eyebrow">Nuevo plan</span>
+          <span class="eyebrow">${editingPlan ? "Editar plan" : "Nuevo plan"}</span>
           <h2>${selected.name}</h2>
         </div>
         <button class="ghost-button" type="button" data-plan-mode="view">
@@ -1245,44 +1346,93 @@ function renderNewPlanForm(selected) {
       <div class="form-grid">
         <section class="form-section">
           <h3>Datos del plan</h3>
-          <label>Nombre del plan<input name="planTitle" required placeholder="Ej. Transicion BARF controlada" /></label>
-          <label>Fecha de inicio<input name="startDate" type="date" value="${toDateInput(today)}" /></label>
-          <label>Duracion estimada<input name="duration" placeholder="Ej. 60 dias" /></label>
-          <label>Objetivo nutricional
-            <select name="objective">
-              <option>Mantenimiento</option>
-              <option>Descenso de peso</option>
-              <option>Aumento de peso</option>
-              <option>Digestivo</option>
-              <option>Renal</option>
-              <option>Hepatico</option>
-              <option>Dermatologico</option>
-              <option>Transicion alimentaria</option>
-              <option>Otro</option>
+          <label>Nombre del plan<input name="planTitle" required value="${editingPlan?.title || ""}" placeholder="Ej. Transicion a natural de Thanos" /></label>
+          <label>Tipo de plan
+            <select name="planType">
+              ${["Transicion a natural", "Dieta mixta", "BARF", "Cocida", "Mantenimiento", "Descenso de peso", "Aumento de peso", "Digestiva", "Renal", "Hepatica", "Dermatologica", "Otro"]
+                .map((type) => `<option ${editingPlan?.planType === type ? "selected" : ""}>${type}</option>`)
+                .join("")}
             </select>
           </label>
+          <label>Fecha de inicio<input name="startDate" type="date" value="${editingPlan?.startDate || toDateInput(today)}" /></label>
+          <label>Duracion estimada<input name="duration" value="${editingPlan?.estimatedDuration || ""}" placeholder="Ej. 7 semanas / 60 dias" /></label>
+          <label>Objetivo del plan<textarea name="objective" rows="3">${editingPlan?.objective || selected.nutrition?.goal || ""}</textarea></label>
           <label>Estado del plan
             <select name="status">
-              <option value="borrador">Borrador</option>
-              <option value="activo">Activo</option>
-              <option value="finalizado">Finalizado</option>
-              <option value="suspendido">Suspendido</option>
+              ${["borrador", "activo", "finalizado", "suspendido"]
+                .map((status) => `<option value="${status}" ${editingPlan?.status === status ? "selected" : ""}>${capitalize(status)}</option>`)
+                .join("")}
             </select>
           </label>
-          <label>Proximo control sugerido<input name="nextControlDate" type="date" /></label>
+          <label>Proximo control sugerido<input name="nextControlDate" type="date" value="${editingPlan?.nextControlDate || ""}" /></label>
         </section>
         <section class="form-section">
-          <h3>Observaciones profesionales</h3>
-          <label>Observaciones generales<textarea name="observations" rows="8"></textarea></label>
+          <h3>Datos del paciente en el plan</h3>
+          <label>Nombre<input name="patientName" value="${editingPlan?.patientSnapshot?.name || selected.name}" /></label>
+          <label>Especie<input name="patientSpecies" value="${editingPlan?.patientSnapshot?.species || selected.species}" /></label>
+          <label>Sexo<input name="patientSex" value="${editingPlan?.patientSnapshot?.sex || selected.sex || ""}" /></label>
+          <label>Raza<input name="patientBreed" value="${editingPlan?.patientSnapshot?.breed || selected.breed}" /></label>
+          <label>Edad<input name="patientAge" value="${editingPlan?.patientSnapshot?.age || selected.age}" /></label>
+          <label>Peso vivo / actual<input name="patientWeight" value="${editingPlan?.patientSnapshot?.weight || selected.weight}" /></label>
+          <label>Condicion corporal<input name="patientBodyScore" value="${editingPlan?.patientSnapshot?.bodyScore || selected.bodyScore}" /></label>
+          <label>Enfermedades previas<textarea name="patientDiseases" rows="3">${editingPlan?.patientSnapshot?.diseases || selected.pathologies || ""}</textarea></label>
+          <label>Antecedentes digestivos o clinicos<textarea name="patientHistory" rows="3">${editingPlan?.patientSnapshot?.history || selected.notes || ""}</textarea></label>
+          <label>Medidas corporales<textarea name="patientMeasures" rows="3" placeholder="Torax: ...&#10;Abdomen: ...&#10;Cuello: ...">${editingPlan?.patientSnapshot?.measures || ""}</textarea></label>
+        </section>
+        <section class="form-section">
+          <h3>Consejos antes de comenzar</h3>
+          <div class="preset-list">
+            ${adviceOptions
+              .map((tip) => `<label class="toggle-line"><input type="checkbox" name="advicePreset" value="${tip}" ${selectedAdvice.includes(tip) ? "checked" : ""} /><span>${tip}</span></label>`)
+              .join("")}
+          </div>
+          <label>Consejos editables<textarea name="adviceText" rows="8">${selectedAdvice.join("\n")}</textarea></label>
+        </section>
+        <section class="form-section">
+          <h3>Ingredientes permitidos</h3>
+          <div class="ingredient-preset-grid">
+            ${ingredientOptions
+              .map((ingredient) => `<label class="toggle-line"><input type="checkbox" name="ingredientPreset" value="${ingredient.name}" ${selectedIngredients.some((item) => item.name === ingredient.name) ? "checked" : ""} /><span>${ingredient.name} · ${ingredient.category}</span></label>`)
+              .join("")}
+          </div>
+          <label>Ingredientes editables<textarea name="ingredientsText" rows="8">${serializeIngredients(selectedIngredients)}</textarea></label>
+          <label><input name="saveIngredientTemplate" type="checkbox" /> Guardar ingredientes nuevos como reutilizables</label>
+        </section>
+        <section class="form-section">
+          <h3>Coccion e indicaciones de preparacion</h3>
+          <label>Indicaciones<textarea name="cookingNotes" rows="8">${cookingNotes}</textarea></label>
+        </section>
+        <section class="form-section">
+          <h3>Racion diaria</h3>
+          <label>Total diario<input name="dailyTotal" value="${editingPlan?.dailyRation?.total || ""}" placeholder="Ej. 200 gr/dia" /></label>
+          <label>Distribucion por alimento<textarea name="dailyRationText" rows="7" placeholder="120 gr carnes&#10;70 gr verduras&#10;10 gr huevo o ricota, alternar">${editingPlan?.dailyRation?.details || ""}</textarea></label>
+        </section>
+        <section class="form-section">
+          <h3>Suplementacion</h3>
+          <div class="preset-list">
+            ${supplementOptions
+              .map((supplement) => `<label class="toggle-line"><input type="checkbox" name="supplementPreset" value="${supplement.name}" ${selectedSupplements.some((item) => item.name === supplement.name) ? "checked" : ""} /><span>${supplement.name}</span></label>`)
+              .join("")}
+          </div>
+          <label>Suplementos editables<textarea name="supplementsText" rows="8">${serializeSupplements(selectedSupplements)}</textarea></label>
+        </section>
+        <section class="form-section wide-form-section">
+          <h3>Esquema semanal de suplementacion</h3>
+          ${renderSupplementScheduleEditor(selectedSupplements, editingPlan?.supplementSchedule || {})}
+        </section>
+        <section class="form-section wide-form-section">
+          <h3>Mensaje final para el tutor</h3>
+          <label>Plantilla editable<textarea name="tutorMessage" rows="8">${tutorMessage}</textarea></label>
           <label class="toggle-line">
             <input name="createAppointment" type="checkbox" />
             <span>Sugerir turno de control al guardar</span>
           </label>
+          <label>Observaciones internas<textarea name="observations" rows="4">${editingPlan?.observations || ""}</textarea></label>
         </section>
       </div>
       <div class="form-actions">
         <button class="ghost-button" type="button" data-plan-mode="view">Cancelar</button>
-        <button class="primary-button" type="submit">Guardar plan</button>
+        <button class="primary-button" type="submit">${editingPlan ? "Guardar cambios" : "Guardar plan"}</button>
       </div>
     </form>
   `;
@@ -1310,8 +1460,17 @@ function renderPlanStageForm(selected) {
         <section class="form-section">
           <h3>Etapa</h3>
           <label>Nombre de la etapa<input name="stageName" required value="${editingStage?.name || ""}" placeholder="Ej. Dias 1-15" /></label>
+          <label>Tipo de duracion
+            <select name="durationType">
+              ${["por dias", "por semana", "por fechas", "personalizado"]
+                .map((type) => `<option ${editingStage?.durationType === type ? "selected" : ""}>${type}</option>`)
+                .join("")}
+            </select>
+          </label>
           <label>Dia desde<input name="dayFrom" type="number" min="1" value="${editingStage?.dayFrom || 1}" /></label>
           <label>Dia hasta<input name="dayTo" type="number" min="1" value="${editingStage?.dayTo || 15}" /></label>
+          <label>Fecha desde<input name="dateFrom" type="date" value="${editingStage?.dateFrom || ""}" /></label>
+          <label>Fecha hasta<input name="dateTo" type="date" value="${editingStage?.dateTo || ""}" /></label>
           <label>Objetivo de la etapa<textarea name="stageObjective" rows="3">${editingStage?.objective || ""}</textarea></label>
           <label>Cantidad de comidas diarias<input name="mealCount" value="${editingStage?.mealCount || "2"}" /></label>
           <label>Estado
@@ -1324,7 +1483,10 @@ function renderPlanStageForm(selected) {
         </section>
         <section class="form-section">
           <h3>Comidas e indicaciones</h3>
-          <label>Detalle por comida<textarea name="mealDetails" rows="5" placeholder="Desayuno: alimento + gramos + indicacion">${editingStage?.mealDetailsText || ""}</textarea></label>
+          <label>Mañana / comida 1<textarea name="mealMorning" rows="3" placeholder="Ej. 75 gr gastrointestinal">${editingStage?.meals?.morning || ""}</textarea></label>
+          <label>Tarde / comida 2<textarea name="mealAfternoon" rows="3" placeholder="Ej. 25 gr cerdo + 40 gr sopa moro">${editingStage?.meals?.afternoon || ""}</textarea></label>
+          <label>Noche / comida 3<textarea name="mealNight" rows="3" placeholder="Opcional">${editingStage?.meals?.night || ""}</textarea></label>
+          <label>Otras comidas o indicaciones<textarea name="mealDetails" rows="5" placeholder="Comida 4, suplementos asociados, observaciones">${editingStage?.mealDetailsText || ""}</textarea></label>
           <label>Suplementos<textarea name="supplements" rows="3">${editingStage?.supplements || ""}</textarea></label>
           <label>Premios permitidos<textarea name="allowedTreats" rows="3">${editingStage?.allowedTreats || ""}</textarea></label>
           <label>Alimentos prohibidos<textarea name="forbiddenFoods" rows="3">${editingStage?.forbiddenFoods || ""}</textarea></label>
@@ -1361,7 +1523,10 @@ function renderPlanStageCard(stage) {
         <span class="meal-count-pill">${formatMealFrequency(stage.mealCount)}</span>
       </div>
       <p><strong>Objetivo:</strong> ${stage.objective || "Pendiente"}</p>
-      <p><strong>Comidas:</strong> ${stage.mealDetailsText || "Completar detalle por comida."}</p>
+      <p><strong>Mañana:</strong> ${stage.meals?.morning || "Sin carga"}</p>
+      <p><strong>Tarde:</strong> ${stage.meals?.afternoon || "Sin carga"}</p>
+      ${stage.meals?.night ? `<p><strong>Noche:</strong> ${stage.meals.night}</p>` : ""}
+      <p><strong>Otras indicaciones:</strong> ${stage.mealDetailsText || "Completar detalle por comida."}</p>
       <p><strong>Evitar:</strong> ${stage.forbiddenFoods || "Sin restricciones cargadas."}</p>
       <p><strong>Alarmas:</strong> ${(stage.alarmSigns || []).join(", ") || "Sin alarmas cargadas."}</p>
       <div class="stage-actions">
@@ -1383,12 +1548,18 @@ function renderTutorPlanPreview(selected, plan, stages) {
   return `
     <div class="tutor-plan-preview">
       <span class="badge">${selected.name}</span>
-      <h3>${activeStage.name}</h3>
-      <p><strong>Que darle:</strong> ${activeStage.mealDetailsText || "Detalle pendiente"}</p>
+      <h3>${plan.title}</h3>
+      <p><strong>Objetivo:</strong> ${plan.objective || "Pendiente"}</p>
+      <p><strong>Racion diaria:</strong> ${plan.dailyRation?.total || "A definir"} · ${plan.dailyRation?.details || ""}</p>
+      <p><strong>Etapa activa:</strong> ${activeStage.name}</p>
+      <p><strong>Mañana:</strong> ${activeStage.meals?.morning || "Segun indicacion"}</p>
+      <p><strong>Tarde:</strong> ${activeStage.meals?.afternoon || "Segun indicacion"}</p>
+      ${activeStage.meals?.night ? `<p><strong>Noche:</strong> ${activeStage.meals.night}</p>` : ""}
       <p><strong>Que evitar:</strong> ${activeStage.forbiddenFoods || "Sin restricciones cargadas."}</p>
       <p><strong>Indicaciones:</strong> ${activeStage.tutorNotes || "Seguir indicaciones profesionales."}</p>
       <p><strong>Senales de alarma:</strong> ${(activeStage.alarmSigns || []).join(", ") || "Consultar ante vomitos, diarrea o rechazo de alimento."}</p>
       <p><strong>Proximo control:</strong> ${activeStage.nextControlDate ? formatDateLabel(activeStage.nextControlDate) : "A definir"}</p>
+      ${plan.tutorMessage ? `<p><strong>Mensaje final:</strong> ${plan.tutorMessage}</p>` : ""}
     </div>
   `;
 }
@@ -1891,13 +2062,28 @@ function renderTutorPlan() {
         <span class="badge">Lectura tutor</span>
       </div>
       <div class="stage-grid tutor-stage-grid">
+        ${activePlan ? `
+          <article class="stage-card tutor-plan-intro">
+            <span class="badge">${activePlan.status}</span>
+            <h3>${activePlan.title}</h3>
+            <p><strong>Objetivo:</strong> ${activePlan.objective || "Pendiente"}</p>
+            <p><strong>Racion diaria:</strong> ${activePlan.dailyRation?.total || "A definir"} ${activePlan.dailyRation?.details ? `· ${activePlan.dailyRation.details}` : ""}</p>
+            <p><strong>Consejos:</strong> ${(activePlan.advice || []).slice(0, 4).join(" · ")}</p>
+            <p><strong>Suplementos:</strong> ${(activePlan.supplements || []).map((item) => item.name).join(", ") || "A definir"}</p>
+            ${activePlan.tutorMessage ? `<p><strong>Mensaje final:</strong> ${activePlan.tutorMessage}</p>` : ""}
+            <button class="primary-button compact" data-export-plan="${activePlan.id}">Descargar PDF</button>
+          </article>
+        ` : ""}
         ${
           stages.length
             ? stages.map((stage) => `
                 <article class="stage-card">
                   <span class="badge">${stage.status}</span>
                   <h3>${stage.name}</h3>
-                  <p><strong>Que darle:</strong> ${stage.mealDetailsText || "Indicacion pendiente."}</p>
+                  <p><strong>Mañana:</strong> ${stage.meals?.morning || "Segun indicacion"}</p>
+                  <p><strong>Tarde:</strong> ${stage.meals?.afternoon || "Segun indicacion"}</p>
+                  ${stage.meals?.night ? `<p><strong>Noche:</strong> ${stage.meals.night}</p>` : ""}
+                  <p><strong>Otras indicaciones:</strong> ${stage.mealDetailsText || "Indicacion pendiente."}</p>
                   <p><strong>Cuando:</strong> ${formatMealFrequency(stage.mealCount)}.</p>
                   <p><strong>Que evitar:</strong> ${stage.forbiddenFoods || "Sin restricciones cargadas."}</p>
                   <p><strong>Importante:</strong> ${stage.tutorNotes || "Seguir el plan indicado por la veterinaria."}</p>
@@ -2039,6 +2225,120 @@ function formatMealFrequency(value) {
     return `${numeric} comida${numeric === 1 ? "" : "s"}/dia`;
   }
   return count;
+}
+
+function splitLines(text) {
+  return text
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
+function serializeIngredients(items = []) {
+  return items
+    .map((item) => `${item.name} | ${item.category || "Otros"} | ${item.amount || ""} | ${item.unit || "gramos"} | ${item.frequency || ""} | ${item.cooking || ""} | ${item.observations || ""} | ${item.visible === false ? "interno" : "tutor"}`)
+    .join("\n");
+}
+
+function parseIngredients(text, selectedNames = []) {
+  const source = store.ingredientLibrary.length ? store.ingredientLibrary : ingredientTemplates;
+  const selected = source.filter((item) => selectedNames.includes(item.name));
+  const fromText = text
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const [name, category, amount, unit, frequency, cooking, observations, visibility] = line.split("|").map((part) => part?.trim() || "");
+      return {
+        id: crypto.randomUUID(),
+        name,
+        category: category || "Otros",
+        amount,
+        unit: unit || "gramos",
+        frequency,
+        cooking,
+        observations,
+        visible: visibility !== "interno",
+      };
+    });
+  const merged = [...selected.map((item) => ({ id: crypto.randomUUID(), ...item, amount: "", frequency: "", observations: "", visible: true })), ...fromText];
+  return dedupeByName(merged);
+}
+
+function serializeSupplements(items = []) {
+  return items
+    .map((item) => `${item.name} | ${item.brand || ""} | ${item.dose || ""} | ${item.unit || ""} | ${item.frequency || ""} | ${item.administration || item.indication || ""} | ${item.storage || ""} | ${item.observations || ""} | ${item.visible === false ? "interno" : "tutor"}`)
+    .join("\n");
+}
+
+function parseSupplements(text, selectedNames = []) {
+  const source = store.supplementLibrary.length ? store.supplementLibrary : supplementTemplates;
+  const selected = source.filter((item) => selectedNames.includes(item.name));
+  const fromText = text
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const [name, brand, dose, unit, frequency, administration, storage, observations, visibility] = line.split("|").map((part) => part?.trim() || "");
+      return {
+        id: crypto.randomUUID(),
+        name,
+        brand,
+        dose,
+        unit,
+        frequency,
+        administration,
+        storage,
+        observations,
+        visible: visibility !== "interno",
+      };
+    });
+  const merged = [...selected.map((item) => ({ id: crypto.randomUUID(), ...item, administration: item.indication, visible: true })), ...fromText];
+  return dedupeByName(merged);
+}
+
+function dedupeByName(items) {
+  const seen = new Set();
+  return items.filter((item) => {
+    const key = item.name?.toLowerCase();
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function renderSupplementScheduleEditor(supplements, schedule) {
+  const days = ["Lunes", "Martes", "Miercoles", "Jueves", "Viernes", "Sabado", "Domingo"];
+  const list = supplements.length ? supplements : supplementTemplates;
+  return `
+    <div class="weekly-table">
+      <div class="weekly-row weekly-head">
+        <span>Suplemento</span>
+        ${days.map((day) => `<span>${day.slice(0, 3)}</span>`).join("")}
+      </div>
+      ${list
+        .map((supplement) => {
+          const activeDays = schedule[supplement.name] || [];
+          return `
+            <div class="weekly-row">
+              <strong>${supplement.name}</strong>
+              ${days
+                .map((day) => `<label><input type="checkbox" name="schedule_${supplement.name}" value="${day}" ${activeDays.includes(day) ? "checked" : ""} /></label>`)
+                .join("")}
+            </div>
+          `;
+        })
+        .join("")}
+    </div>
+  `;
+}
+
+function getSupplementSchedule(data, supplements) {
+  const schedule = {};
+  supplements.forEach((supplement) => {
+    schedule[supplement.name] = data.getAll(`schedule_${supplement.name}`).map((day) => day.toString());
+  });
+  return schedule;
 }
 
 function buildAppointmentSlots(startHour, endHour, intervalHours = 2) {
@@ -2304,6 +2604,11 @@ function savePersistentData() {
     pets: store.pets,
     nutritionPlans: store.nutritionPlans,
     nutritionPlanStages: store.nutritionPlanStages,
+    ingredientLibrary: store.ingredientLibrary,
+    adviceLibrary: store.adviceLibrary,
+    supplementLibrary: store.supplementLibrary,
+    cookingLibrary: store.cookingLibrary,
+    tutorMessageLibrary: store.tutorMessageLibrary,
     followups: store.followups,
     alerts: store.alerts,
     clinicalHistory: store.clinicalHistory,
@@ -2326,6 +2631,11 @@ function loadPersistentData() {
       "pets",
       "nutritionPlans",
       "nutritionPlanStages",
+      "ingredientLibrary",
+      "adviceLibrary",
+      "supplementLibrary",
+      "cookingLibrary",
+      "tutorMessageLibrary",
       "followups",
       "alerts",
       "clinicalHistory",
@@ -2348,6 +2658,11 @@ function loadPersistentData() {
 }
 
 function initializeRelationalData() {
+  store.ingredientLibrary = store.ingredientLibrary.length ? store.ingredientLibrary : ingredientTemplates.map((item) => ({ id: crypto.randomUUID(), ...item }));
+  store.adviceLibrary = store.adviceLibrary.length ? store.adviceLibrary : planAdviceTemplates.map((text) => ({ id: crypto.randomUUID(), text }));
+  store.supplementLibrary = store.supplementLibrary.length ? store.supplementLibrary : supplementTemplates.map((item) => ({ id: crypto.randomUUID(), ...item }));
+  store.cookingLibrary = store.cookingLibrary.length ? store.cookingLibrary : cookingTemplates.map((text) => ({ id: crypto.randomUUID(), text }));
+  store.tutorMessageLibrary = store.tutorMessageLibrary.length ? store.tutorMessageLibrary : tutorMessageTemplates.map((text) => ({ id: crypto.randomUUID(), text }));
   store.pets.forEach((pet) => {
     pet.preVisitDocuments = Array.isArray(pet.preVisitDocuments) ? pet.preVisitDocuments : [];
     pet.tutorPortalEnabled = Boolean(pet.tutorPortalEnabled);
@@ -2388,6 +2703,42 @@ function initializeRelationalData() {
         });
       });
     }
+    store.nutritionPlanStages
+      .filter((stage) => stage.patientId === pet.id)
+      .forEach((stage) => {
+        stage.durationType = stage.durationType || "por dias";
+        stage.meals = stage.meals || {
+          morning: "",
+          afternoon: stage.mealDetailsText || "",
+          night: "",
+        };
+      });
+    store.nutritionPlans
+      .filter((plan) => plan.patientId === pet.id)
+      .forEach((plan) => {
+        plan.tutorId = plan.tutorId || pet.tutorId;
+        plan.planType = plan.planType || (plan.objective?.includes("Transicion") ? "Transicion a natural" : "Cocida");
+        plan.patientSnapshot = plan.patientSnapshot || {
+          name: pet.name,
+          species: pet.species,
+          sex: pet.sex || "",
+          breed: pet.breed,
+          age: pet.age,
+          weight: pet.weight,
+          bodyScore: pet.bodyScore,
+          diseases: pet.pathologies || "",
+          history: pet.notes || "",
+          measures: "",
+        };
+        plan.advice = Array.isArray(plan.advice) && plan.advice.length ? plan.advice : planAdviceTemplates.slice();
+        plan.ingredients = Array.isArray(plan.ingredients) && plan.ingredients.length ? plan.ingredients : ingredientTemplates.slice(0, pet.id === "mora" ? 10 : 6).map((item) => ({ id: crypto.randomUUID(), ...item, amount: "", frequency: "", observations: "", visible: true }));
+        plan.cookingNotes = Array.isArray(plan.cookingNotes) && plan.cookingNotes.length ? plan.cookingNotes : cookingTemplates.slice();
+        plan.dailyRation = plan.dailyRation || { total: pet.nutrition?.dailyAmount || "A definir", details: "" };
+        plan.supplements = Array.isArray(plan.supplements) && plan.supplements.length ? plan.supplements : supplementTemplates.slice(0, 3).map((item) => ({ id: crypto.randomUUID(), ...item, administration: item.indication, visible: true }));
+        plan.supplementSchedule = plan.supplementSchedule || {};
+        plan.tutorMessage = plan.tutorMessage || tutorMessageTemplates.join("\n");
+        plan.pdfExports = Array.isArray(plan.pdfExports) ? plan.pdfExports : [];
+      });
     if (!store.followups.some((item) => item.patientId === pet.id) && Array.isArray(pet.weights) && pet.weights.length) {
       const lastWeight = pet.weights[pet.weights.length - 1];
       store.followups.unshift({
@@ -2655,27 +3006,71 @@ function createPlan(form) {
     .forEach((plan) => {
       if (getRequiredText(data, "status") === "activo") plan.status = "borrador";
     });
-  const plan = {
-    id: crypto.randomUUID(),
+  const ingredients = parseIngredients(getRequiredText(data, "ingredientsText"), data.getAll("ingredientPreset").map((item) => item.toString()));
+  const supplements = parseSupplements(getRequiredText(data, "supplementsText"), data.getAll("supplementPreset").map((item) => item.toString()));
+  const planData = {
     patientId,
+    tutorId: getPet(patientId).tutorId,
     title,
+    planType: getRequiredText(data, "planType"),
     startDate: getRequiredText(data, "startDate") || toDateInput(today),
     estimatedDuration: getRequiredText(data, "duration") || "60 dias",
     objective: getRequiredText(data, "objective"),
     status: getRequiredText(data, "status") || "borrador",
     observations: getRequiredText(data, "observations"),
+    nextControlDate: getRequiredText(data, "nextControlDate"),
+    patientSnapshot: {
+      name: getRequiredText(data, "patientName"),
+      species: getRequiredText(data, "patientSpecies"),
+      sex: getRequiredText(data, "patientSex"),
+      breed: getRequiredText(data, "patientBreed"),
+      age: getRequiredText(data, "patientAge"),
+      weight: getRequiredText(data, "patientWeight"),
+      bodyScore: getRequiredText(data, "patientBodyScore"),
+      diseases: getRequiredText(data, "patientDiseases"),
+      history: getRequiredText(data, "patientHistory"),
+      measures: getRequiredText(data, "patientMeasures"),
+    },
+    advice: splitLines(getRequiredText(data, "adviceText")),
+    ingredients,
+    cookingNotes: splitLines(getRequiredText(data, "cookingNotes")),
+    dailyRation: {
+      total: getRequiredText(data, "dailyTotal"),
+      details: getRequiredText(data, "dailyRationText"),
+    },
+    supplements,
+    supplementSchedule: getSupplementSchedule(data, supplements),
+    tutorMessage: getRequiredText(data, "tutorMessage"),
     tutorVisible: true,
-    createdAt: new Date().toISOString(),
   };
-  store.nutritionPlans.unshift(plan);
+  let plan = store.editingPlanId ? store.nutritionPlans.find((item) => item.id === store.editingPlanId) : null;
+  if (plan) {
+    Object.assign(plan, planData, { updatedAt: new Date().toISOString() });
+  } else {
+    plan = {
+      id: crypto.randomUUID(),
+      ...planData,
+      pdfExports: [],
+      createdAt: new Date().toISOString(),
+    };
+    store.nutritionPlans.unshift(plan);
+  }
   const pet = getPet(patientId);
   pet.status = plan.status === "activo" ? "Plan activo" : "Plan en borrador";
-  const nextControlDate = getRequiredText(data, "nextControlDate");
+  const nextControlDate = plan.nextControlDate;
   if (data.get("createAppointment") === "on" && nextControlDate) {
     createSuggestedAppointment(patientId, nextControlDate, "Control de plan alimentario");
   }
-  addClinicalHistory(patientId, "plan_alimentario", plan.id, "Nuevo plan alimentario", `${title} · ${plan.objective}`, plan.startDate);
+  if (data.get("saveIngredientTemplate") === "on") {
+    saveReusablePlanOptions(plan);
+  }
+  if (plan.tutorMessage?.toLowerCase().includes("foto")) {
+    pet.reminders = Array.isArray(pet.reminders) ? pet.reminders : [];
+    pet.reminders.unshift("Enviar fotos de evolucion segun mensaje del plan.");
+  }
+  addClinicalHistory(patientId, "plan_alimentario", plan.id, store.editingPlanId ? "Plan alimentario editado" : "Nuevo plan alimentario", `${title} · ${plan.objective}`, plan.startDate);
   store.planMode = "view";
+  store.editingPlanId = "";
   savePersistentData();
   alert("Plan guardado y vinculado al paciente.");
   render();
@@ -2690,10 +3085,18 @@ function savePlanStage(form) {
     planId: plan.id,
     patientId,
     name: getRequiredText(data, "stageName"),
+    durationType: getRequiredText(data, "durationType"),
     dayFrom: Number(getRequiredText(data, "dayFrom")) || 1,
     dayTo: Number(getRequiredText(data, "dayTo")) || 15,
+    dateFrom: getRequiredText(data, "dateFrom"),
+    dateTo: getRequiredText(data, "dateTo"),
     objective: getRequiredText(data, "stageObjective"),
     mealCount: getRequiredText(data, "mealCount"),
+    meals: {
+      morning: getRequiredText(data, "mealMorning"),
+      afternoon: getRequiredText(data, "mealAfternoon"),
+      night: getRequiredText(data, "mealNight"),
+    },
     mealDetailsText: getRequiredText(data, "mealDetails"),
     supplements: getRequiredText(data, "supplements"),
     allowedTreats: getRequiredText(data, "allowedTreats"),
@@ -2739,12 +3142,42 @@ function savePlanStage(form) {
   if (stage.nextControlDate) {
     createSuggestedAppointment(patientId, stage.nextControlDate, "Control al finalizar etapa");
   }
+  if (stage.status === "activa") {
+    plan.activeStageId = stage.id;
+    plan.lastRecommendation = `Etapa activa: ${stage.name}`;
+  }
   addClinicalHistory(patientId, "plan_alimentario", stage.id, stageData.status === "activa" ? "Etapa activa" : "Etapa de plan actualizada", stage.name, toDateInput(today));
   store.planMode = "view";
   store.editingStageId = "";
   savePersistentData();
   alert("Etapa guardada.");
   render();
+}
+
+function saveReusablePlanOptions(plan) {
+  plan.ingredients.forEach((ingredient) => {
+    if (!store.ingredientLibrary.some((item) => item.name?.toLowerCase() === ingredient.name?.toLowerCase())) {
+      store.ingredientLibrary.push({ id: crypto.randomUUID(), ...ingredient });
+    }
+  });
+  plan.advice.forEach((text) => {
+    if (!store.adviceLibrary.some((item) => item.text?.toLowerCase() === text.toLowerCase())) {
+      store.adviceLibrary.push({ id: crypto.randomUUID(), text });
+    }
+  });
+  plan.supplements.forEach((supplement) => {
+    if (!store.supplementLibrary.some((item) => item.name?.toLowerCase() === supplement.name?.toLowerCase())) {
+      store.supplementLibrary.push({ id: crypto.randomUUID(), ...supplement });
+    }
+  });
+  plan.cookingNotes.forEach((text) => {
+    if (!store.cookingLibrary.some((item) => item.text?.toLowerCase() === text.toLowerCase())) {
+      store.cookingLibrary.push({ id: crypto.randomUUID(), text });
+    }
+  });
+  if (plan.tutorMessage && !store.tutorMessageLibrary.some((item) => item.text?.toLowerCase() === plan.tutorMessage.toLowerCase())) {
+    store.tutorMessageLibrary.push({ id: crypto.randomUUID(), text: plan.tutorMessage });
+  }
 }
 
 function handleStageAction(action, stageId) {
@@ -2780,6 +3213,122 @@ function handleStageAction(action, stageId) {
   addClinicalHistory(stage.patientId, "plan_alimentario", stage.id, "Etapa de plan actualizada", `${stage.name} · ${action}`, toDateInput(today));
   savePersistentData();
   render();
+}
+
+function exportPlanPdf(planId) {
+  const plan = store.nutritionPlans.find((item) => item.id === planId);
+  if (!plan) return;
+  const pet = getPet(plan.patientId);
+  const tutor = store.tutors.find((item) => item.id === pet.tutorId);
+  const stages = getPlanStages(plan.id);
+  plan.pdfExports = Array.isArray(plan.pdfExports) ? plan.pdfExports : [];
+  plan.pdfExports.unshift({ id: crypto.randomUUID(), exportedAt: new Date().toISOString() });
+  savePersistentData();
+  const html = buildPlanPdfHtml(plan, pet, tutor, stages);
+  const printWindow = window.open("", "_blank");
+  if (!printWindow) {
+    alert("El navegador bloqueo la ventana de exportacion. Habilita ventanas emergentes para descargar el PDF.");
+    return;
+  }
+  printWindow.document.write(html);
+  printWindow.document.close();
+  printWindow.focus();
+  setTimeout(() => printWindow.print(), 400);
+}
+
+function buildPlanPdfHtml(plan, pet, tutor, stages) {
+  const activeStage = stages.find((stage) => stage.status === "activa") || stages[0];
+  return `
+    <!doctype html>
+    <html lang="es">
+      <head>
+        <meta charset="UTF-8" />
+        <title>${appConfig.appName} · ${plan.title}</title>
+        <style>
+          body { margin: 0; padding: 32px; font-family: Inter, Arial, sans-serif; color: #21342b; background: #fff; }
+          .pdf-shell { max-width: 980px; margin: 0 auto; }
+          .pdf-header { display: flex; justify-content: space-between; gap: 20px; border-bottom: 4px solid #8e6bb8; padding-bottom: 18px; margin-bottom: 24px; }
+          .brand { color: #6f4ca0; font-size: 28px; font-weight: 900; }
+          h1 { margin: 10px 0 0; font-size: 24px; }
+          h2 { margin: 0 0 10px; color: #4f8f6b; font-size: 18px; }
+          h3 { margin: 14px 0 8px; font-size: 15px; }
+          p, li { line-height: 1.5; font-size: 13px; }
+          .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+          .card { border: 1px solid #dce7df; border-radius: 10px; padding: 14px; margin-bottom: 14px; background: #fbfdf9; break-inside: avoid; }
+          .tag { display: inline-block; padding: 4px 8px; border-radius: 999px; background: #eee7f6; color: #6f4ca0; font-size: 11px; font-weight: 800; }
+          table { width: 100%; border-collapse: collapse; font-size: 12px; }
+          th, td { border: 1px solid #dce7df; padding: 7px; text-align: left; vertical-align: top; }
+          th { background: #f3edf8; color: #6f4ca0; }
+          @media print { body { padding: 20px; } .card { break-inside: avoid; } }
+        </style>
+      </head>
+      <body>
+        <main class="pdf-shell">
+          <header class="pdf-header">
+            <div>
+              <div class="brand">${appConfig.appName}</div>
+              <h1>${plan.title}</h1>
+              <p>${plan.planType || "Plan alimentario"} · ${formatDateLabel(plan.startDate)} · ${plan.estimatedDuration || "Duracion a definir"}</p>
+            </div>
+            <div>
+              <span class="tag">${plan.status}</span>
+              <p>Fecha de emision: ${new Date().toLocaleDateString("es-AR")}</p>
+              <p>Profesional: ${appConfig.clinicName} Vet</p>
+            </div>
+          </header>
+          <section class="grid">
+            <article class="card">
+              <h2>Paciente</h2>
+              <p><strong>${pet.name}</strong> · ${pet.species} · ${pet.breed}</p>
+              <p>Edad: ${pet.age} · Peso: ${pet.weight} kg · Condicion: ${pet.bodyScore}</p>
+              <p>${plan.patientSnapshot?.history || pet.notes || ""}</p>
+            </article>
+            <article class="card">
+              <h2>Tutor</h2>
+              <p>${pet.tutor}</p>
+              <p>${tutor?.email || pet.email || ""} · ${tutor?.phone || pet.phone || ""}</p>
+              <p><strong>Objetivo:</strong> ${plan.objective || "Pendiente"}</p>
+            </article>
+          </section>
+          ${pdfListSection("Consejos antes de comenzar", plan.advice)}
+          ${pdfTableSection("Ingredientes permitidos", ["Ingrediente", "Categoria", "Cantidad", "Unidad", "Frecuencia", "Coccion"], (plan.ingredients || []).filter((item) => item.visible !== false).map((item) => [item.name, item.category, item.amount, item.unit, item.frequency, item.cooking]))}
+          ${pdfListSection("Coccion y preparacion", plan.cookingNotes)}
+          <article class="card"><h2>Racion diaria</h2><p><strong>${plan.dailyRation?.total || "A definir"}</strong></p><p>${(plan.dailyRation?.details || "").replaceAll("\n", "<br>")}</p></article>
+          ${pdfTableSection("Etapas del plan", ["Etapa", "Duracion", "Mañana", "Tarde", "Noche", "Indicaciones"], stages.map((stage) => [stage.name, stage.durationType || `Dias ${stage.dayFrom}-${stage.dayTo}`, stage.meals?.morning || "", stage.meals?.afternoon || "", stage.meals?.night || "", stage.mealDetailsText || ""]))}
+          ${pdfTableSection("Suplementacion", ["Suplemento", "Dosis", "Frecuencia", "Administracion", "Conservacion"], (plan.supplements || []).filter((item) => item.visible !== false).map((item) => [item.name, `${item.dose || ""} ${item.unit || ""}`, item.frequency || "", item.administration || item.indication || "", item.storage || ""]))}
+          ${pdfScheduleSection(plan)}
+          <article class="card"><h2>Mensaje final para el tutor</h2><p>${(plan.tutorMessage || "").replaceAll("\n", "<br>")}</p></article>
+          ${activeStage ? `<article class="card"><h2>Etapa activa</h2><p>${activeStage.name} · ${activeStage.tutorNotes || activeStage.objective || ""}</p></article>` : ""}
+        </main>
+      </body>
+    </html>
+  `;
+}
+
+function pdfListSection(title, items = []) {
+  if (!items.length) return "";
+  return `<article class="card"><h2>${title}</h2><ul>${items.map((item) => `<li>${item}</li>`).join("")}</ul></article>`;
+}
+
+function pdfTableSection(title, headers, rows = []) {
+  if (!rows.length) return "";
+  return `
+    <article class="card">
+      <h2>${title}</h2>
+      <table>
+        <thead><tr>${headers.map((header) => `<th>${header}</th>`).join("")}</tr></thead>
+        <tbody>${rows.map((row) => `<tr>${row.map((cell) => `<td>${cell || ""}</td>`).join("")}</tr>`).join("")}</tbody>
+      </table>
+    </article>
+  `;
+}
+
+function pdfScheduleSection(plan) {
+  const schedule = plan.supplementSchedule || {};
+  const supplements = Object.keys(schedule).filter((name) => schedule[name]?.length);
+  if (!supplements.length) return "";
+  const days = ["Lunes", "Martes", "Miercoles", "Jueves", "Viernes", "Sabado", "Domingo"];
+  return pdfTableSection("Esquema semanal de suplementacion", ["Suplemento", ...days], supplements.map((name) => [name, ...days.map((day) => schedule[name].includes(day) ? "Si" : "")]));
 }
 
 function saveTutorDocuments(form) {
@@ -3008,6 +3557,18 @@ function bindEvents() {
       } else {
         goBack();
       }
+    });
+  });
+
+  document.querySelectorAll("[data-edit-plan]").forEach((button) => {
+    button.addEventListener("click", () => {
+      navigateTo("plans", { planMode: "new", editingPlanId: button.dataset.editPlan });
+    });
+  });
+
+  document.querySelectorAll("[data-export-plan]").forEach((button) => {
+    button.addEventListener("click", () => {
+      exportPlanPdf(button.dataset.exportPlan);
     });
   });
 
