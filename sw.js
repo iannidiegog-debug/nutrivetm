@@ -1,4 +1,4 @@
-const CACHE_NAME = "nutrivetm-v11";
+const CACHE_NAME = "nutrim-vet-v12";
 const firebaseConfig = {
   apiKey: "AIzaSyDvDCK0keMuHMh9tBZMXFFpUP38iFGV8xI",
   authDomain: "nutrivetm-d73a7.firebaseapp.com",
@@ -26,7 +26,7 @@ try {
   const messaging = firebase.messaging();
 
   messaging.onBackgroundMessage((payload) => {
-    const title = payload.notification?.title || "NutriVetM";
+    const title = payload.notification?.title || "NutriM-Vet";
     const options = {
       body: payload.notification?.body || "Tenes una nueva alerta.",
       icon: "icon-192.svg",
