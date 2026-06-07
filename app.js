@@ -1246,6 +1246,102 @@ function previewBlock(title, text) {
   `;
 }
 
+function recordItem(label, value) {
+  return `<div class="record-item"><span>${label}</span><strong>${value}</strong></div>`;
+}
+
+function renderStagesTable(stages) {
+  if (!stages.length) {
+    return renderEmptyState("Sin etapas cargadas", "Agregar una etapa para indicar comidas, gramos, restricciones y criterios de avance.");
+  }
+  return `
+    <div class="data-table">
+      <div class="data-row data-head">
+        <span>Etapa</span>
+        <span>Duracion</span>
+        <span>Mañana</span>
+        <span>Tarde</span>
+        <span>Estado</span>
+        <span>Acciones</span>
+      </div>
+      ${stages
+        .map(
+          (stage) => `
+            <div class="data-row">
+              <span><strong>${stage.name}</strong><small>${stage.objective || "Sin objetivo"}</small></span>
+              <span>${stage.durationType || "por dias"}<small>${stage.dayFrom || "-"} a ${stage.dayTo || "-"}</small></span>
+              <span>${stage.meals?.morning || "-"}</span>
+              <span>${stage.meals?.afternoon || "-"}</span>
+              <span><span class="badge">${stage.status}</span></span>
+              <span class="row-actions">
+                <button class="soft-button compact" data-stage-action="edit" data-stage-id="${stage.id}">Editar</button>
+                <button class="soft-button compact" data-stage-action="duplicate" data-stage-id="${stage.id}">Duplicar</button>
+                <button class="ghost-button compact" data-stage-action="delete" data-stage-id="${stage.id}">Eliminar</button>
+              </span>
+            </div>
+          `
+        )
+        .join("")}
+    </div>
+  `;
+}
+
+function renderIngredientsTable(ingredients) {
+  if (!ingredients.length) return renderEmptyState("Sin ingredientes", "Editar el plan para cargar ingredientes permitidos.");
+  return `
+    <div class="data-table ingredients-table">
+      <div class="data-row data-head">
+        <span>Ingrediente</span>
+        <span>Categoria</span>
+        <span>Cantidad</span>
+        <span>Coccion</span>
+        <span>Visibilidad</span>
+      </div>
+      ${ingredients
+        .map(
+          (item) => `
+            <div class="data-row">
+              <span><strong>${item.name}</strong><small>${item.observations || ""}</small></span>
+              <span>${item.category || "-"}</span>
+              <span>${[item.amount, item.unit, item.frequency].filter(Boolean).join(" · ") || "-"}</span>
+              <span>${item.cooking || "-"}</span>
+              <span>${item.visible === false ? "Interno" : "Tutor"}</span>
+            </div>
+          `
+        )
+        .join("")}
+    </div>
+  `;
+}
+
+function renderSupplementsTable(supplements, schedule) {
+  if (!supplements.length) return renderEmptyState("Sin suplementos", "Editar el plan para cargar suplementacion.");
+  return `
+    <div class="data-table supplements-table">
+      <div class="data-row data-head">
+        <span>Suplemento</span>
+        <span>Dosis</span>
+        <span>Frecuencia</span>
+        <span>Dias</span>
+        <span>Indicacion</span>
+      </div>
+      ${supplements
+        .map(
+          (item) => `
+            <div class="data-row">
+              <span><strong>${item.name}</strong><small>${item.brand || ""}</small></span>
+              <span>${[item.dose, item.unit].filter(Boolean).join(" ") || "-"}</span>
+              <span>${item.frequency || "-"}</span>
+              <span>${(schedule[item.name] || []).join(", ") || "-"}</span>
+              <span>${item.administration || item.indication || item.observations || "-"}</span>
+            </div>
+          `
+        )
+        .join("")}
+    </div>
+  `;
+}
+
 function renderPlans() {
   const selected = getPet(store.selectedPetId);
   if (store.planMode === "new") {
@@ -1257,8 +1353,8 @@ function renderPlans() {
   const activePlan = getActivePlan(selected.id);
   const stages = activePlan ? getPlanStages(activePlan.id) : [];
   return `
-    <div class="content-grid plan-workspace">
-      <section class="panel wide">
+    <div class="plan-workbench">
+      <section class="panel wide plan-console">
         <div class="section-heading">
           <div>
             <span class="eyebrow">Plan alimentario</span>
@@ -1269,51 +1365,65 @@ function renderPlans() {
             <button class="primary-button" data-plan-mode="new">+ Nuevo plan</button>
           </div>
         </div>
-        <div class="clinical-facts plan-facts">
-          ${detail("Tutor", selected.tutor)}
-          ${detail("Peso actual", `${selected.weight} kg`)}
-          ${detail("Peso objetivo", `${selected.targetWeight} kg`)}
-          ${detail("Objetivo", selected.nutrition?.goal || activePlan?.objective || "Pendiente")}
-          ${detail("Plan activo", activePlan?.title || "Sin plan activo")}
-          ${detail("Estado", activePlan?.status || "borrador")}
-        </div>
         ${
           activePlan
             ? `
-              <article class="plan-summary-card">
+              <div class="plan-console-header">
                 <div>
                   <span class="badge">${activePlan.status}</span>
                   <h3>${activePlan.title}</h3>
-                  <p>${activePlan.objective || "Objetivo pendiente"} · ${activePlan.planType || "Tipo pendiente"} · ${activePlan.estimatedDuration || "Duracion a definir"}</p>
-                  <p>${activePlan.observations || activePlan.indications || "Sin observaciones cargadas."}</p>
-                  ${activePlan.lastRecommendation ? `<p><strong>Ultima recomendacion:</strong> ${activePlan.lastRecommendation}</p>` : ""}
+                  <p>${activePlan.planType || "Tipo pendiente"} · ${activePlan.estimatedDuration || "Duracion a definir"}</p>
                 </div>
-                <div class="stage-actions">
-                  <button class="soft-button compact" data-edit-plan="${activePlan.id}">Editar plan</button>
-                  <button class="soft-button compact" data-plan-mode="stage">Agregar etapa</button>
+                <div class="section-actions">
+                  <button class="soft-button compact" data-edit-plan="${activePlan.id}">Editar datos</button>
+                  <button class="soft-button compact" data-plan-mode="stage">Nueva etapa</button>
                   <button class="primary-button compact" data-export-plan="${activePlan.id}">Exportar PDF</button>
                 </div>
-              </article>
-              ${renderPlanSectionPreview(activePlan)}
-              <div class="stage-grid">
-                ${
-                  stages.length
-                    ? stages.map(renderPlanStageCard).join("")
-                    : renderEmptyState("Sin etapas cargadas", "Agregar una etapa para indicar comidas, gramos, restricciones y criterios de avance.")
-                }
+              </div>
+              <div class="plan-dashboard">
+                <aside class="plan-index">
+                  <a href="#plan-resumen">Resumen</a>
+                  <a href="#plan-etapas">Etapas</a>
+                  <a href="#plan-ingredientes">Ingredientes</a>
+                  <a href="#plan-suplementos">Suplementos</a>
+                  <a href="#plan-tutor">Tutor</a>
+                </aside>
+                <div class="plan-record">
+                  <section id="plan-resumen" class="record-section">
+                    <h3>Resumen clinico</h3>
+                    <div class="record-grid">
+                      ${recordItem("Tutor", selected.tutor)}
+                      ${recordItem("Peso actual", `${selected.weight} kg`)}
+                      ${recordItem("Peso objetivo", `${selected.targetWeight} kg`)}
+                      ${recordItem("Condicion", selected.bodyScore)}
+                      ${recordItem("Objetivo", activePlan.objective || "Pendiente")}
+                      ${recordItem("Proximo control", activePlan.nextControlDate ? formatDateLabel(activePlan.nextControlDate) : "A definir")}
+                    </div>
+                  </section>
+                  <section id="plan-etapas" class="record-section">
+                    <div class="section-heading compact-heading">
+                      <h3>Etapas y comidas</h3>
+                      <button class="soft-button compact" data-plan-mode="stage">Agregar etapa</button>
+                    </div>
+                    ${renderStagesTable(stages)}
+                  </section>
+                  <section id="plan-ingredientes" class="record-section">
+                    <h3>Ingredientes permitidos</h3>
+                    ${renderIngredientsTable(activePlan.ingredients || [])}
+                  </section>
+                  <section id="plan-suplementos" class="record-section">
+                    <h3>Suplementacion</h3>
+                    ${renderSupplementsTable(activePlan.supplements || [], activePlan.supplementSchedule || {})}
+                  </section>
+                  <section id="plan-tutor" class="record-section">
+                    <h3>Vista tutor</h3>
+                    ${renderTutorPlanPreview(selected, activePlan, stages)}
+                  </section>
+                </div>
               </div>
             `
             : renderEmptyState("Plan pendiente", "Crear un plan para que las etapas, controles y alertas queden vinculados a este paciente.")
         }
-      </section>
-      <section class="panel">
-        <div class="section-heading">
-          <div>
-            <span class="eyebrow">Vista tutor</span>
-            <h2>Indicaciones visibles</h2>
-          </div>
-        </div>
-        ${renderTutorPlanPreview(selected, activePlan, stages)}
       </section>
     </div>
   `;
@@ -1332,7 +1442,7 @@ function renderNewPlanForm(selected) {
   const cookingNotes = editingPlan?.cookingNotes?.length ? editingPlan.cookingNotes.join("\n") : cookingOptions.join("\n");
   const tutorMessage = editingPlan?.tutorMessage || messageOptions.join("\n");
   return `
-    <form class="panel wide patient-form" data-new-plan-form>
+    <form class="panel wide patient-form plan-builder-form" data-new-plan-form>
       <div class="section-heading">
         <div>
           <span class="eyebrow">${editingPlan ? "Editar plan" : "Nuevo plan"}</span>
@@ -1343,8 +1453,17 @@ function renderNewPlanForm(selected) {
           Volver
         </button>
       </div>
+      <nav class="builder-nav" aria-label="Secciones del plan">
+        <a href="#plan-datos">Datos</a>
+        <a href="#plan-paciente">Paciente</a>
+        <a href="#plan-consejos">Consejos</a>
+        <a href="#plan-ingredientes-form">Ingredientes</a>
+        <a href="#plan-racion">Racion</a>
+        <a href="#plan-suplementos-form">Suplementos</a>
+        <a href="#plan-mensaje">Tutor</a>
+      </nav>
       <div class="form-grid">
-        <section class="form-section">
+        <section id="plan-datos" class="form-section">
           <h3>Datos del plan</h3>
           <label>Nombre del plan<input name="planTitle" required value="${editingPlan?.title || ""}" placeholder="Ej. Transicion a natural de Thanos" /></label>
           <label>Tipo de plan
@@ -1366,7 +1485,7 @@ function renderNewPlanForm(selected) {
           </label>
           <label>Proximo control sugerido<input name="nextControlDate" type="date" value="${editingPlan?.nextControlDate || ""}" /></label>
         </section>
-        <section class="form-section">
+        <section id="plan-paciente" class="form-section">
           <h3>Datos del paciente en el plan</h3>
           <label>Nombre<input name="patientName" value="${editingPlan?.patientSnapshot?.name || selected.name}" /></label>
           <label>Especie<input name="patientSpecies" value="${editingPlan?.patientSnapshot?.species || selected.species}" /></label>
@@ -1379,7 +1498,7 @@ function renderNewPlanForm(selected) {
           <label>Antecedentes digestivos o clinicos<textarea name="patientHistory" rows="3">${editingPlan?.patientSnapshot?.history || selected.notes || ""}</textarea></label>
           <label>Medidas corporales<textarea name="patientMeasures" rows="3" placeholder="Torax: ...&#10;Abdomen: ...&#10;Cuello: ...">${editingPlan?.patientSnapshot?.measures || ""}</textarea></label>
         </section>
-        <section class="form-section">
+        <section id="plan-consejos" class="form-section">
           <h3>Consejos antes de comenzar</h3>
           <div class="preset-list">
             ${adviceOptions
@@ -1388,7 +1507,7 @@ function renderNewPlanForm(selected) {
           </div>
           <label>Consejos editables<textarea name="adviceText" rows="8">${selectedAdvice.join("\n")}</textarea></label>
         </section>
-        <section class="form-section">
+        <section id="plan-ingredientes-form" class="form-section">
           <h3>Ingredientes permitidos</h3>
           <div class="ingredient-preset-grid">
             ${ingredientOptions
@@ -1402,12 +1521,12 @@ function renderNewPlanForm(selected) {
           <h3>Coccion e indicaciones de preparacion</h3>
           <label>Indicaciones<textarea name="cookingNotes" rows="8">${cookingNotes}</textarea></label>
         </section>
-        <section class="form-section">
+        <section id="plan-racion" class="form-section">
           <h3>Racion diaria</h3>
           <label>Total diario<input name="dailyTotal" value="${editingPlan?.dailyRation?.total || ""}" placeholder="Ej. 200 gr/dia" /></label>
           <label>Distribucion por alimento<textarea name="dailyRationText" rows="7" placeholder="120 gr carnes&#10;70 gr verduras&#10;10 gr huevo o ricota, alternar">${editingPlan?.dailyRation?.details || ""}</textarea></label>
         </section>
-        <section class="form-section">
+        <section id="plan-suplementos-form" class="form-section">
           <h3>Suplementacion</h3>
           <div class="preset-list">
             ${supplementOptions
@@ -1420,7 +1539,7 @@ function renderNewPlanForm(selected) {
           <h3>Esquema semanal de suplementacion</h3>
           ${renderSupplementScheduleEditor(selectedSupplements, editingPlan?.supplementSchedule || {})}
         </section>
-        <section class="form-section wide-form-section">
+        <section id="plan-mensaje" class="form-section wide-form-section">
           <h3>Mensaje final para el tutor</h3>
           <label>Plantilla editable<textarea name="tutorMessage" rows="8">${tutorMessage}</textarea></label>
           <label class="toggle-line">
