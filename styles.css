@@ -1319,6 +1319,168 @@ label,
   align-items: start;
 }
 
+.plan-workbench {
+  display: grid;
+  gap: 16px;
+}
+
+.plan-console {
+  overflow: hidden;
+}
+
+.plan-console-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px;
+  margin-bottom: 16px;
+  border: 1px solid #d7c8ea;
+  border-radius: var(--radius);
+  background: #fbf9ff;
+}
+
+.plan-dashboard {
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.plan-index {
+  position: sticky;
+  top: 12px;
+  display: grid;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #fff;
+}
+
+.plan-index a {
+  padding: 9px 10px;
+  border-radius: 6px;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 850;
+  text-decoration: none;
+}
+
+.plan-index a:hover {
+  background: var(--surface-soft);
+}
+
+.plan-record {
+  display: grid;
+  gap: 14px;
+}
+
+.record-section {
+  display: grid;
+  gap: 12px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.record-section:last-child {
+  border-bottom: 0;
+}
+
+.record-section h3 {
+  font-size: 18px;
+}
+
+.record-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.record-item {
+  display: grid;
+  gap: 3px;
+  min-height: 64px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #fbfdf9;
+}
+
+.record-item span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.record-item strong {
+  font-size: 14px;
+}
+
+.compact-heading {
+  margin-bottom: 0;
+}
+
+.data-table {
+  display: grid;
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #fff;
+}
+
+.data-row {
+  display: grid;
+  grid-template-columns: 1.15fr 0.85fr 1.2fr 1.2fr 0.75fr 1.35fr;
+  min-width: 900px;
+  border-bottom: 1px solid var(--line);
+}
+
+.ingredients-table .data-row {
+  grid-template-columns: 1.2fr 0.8fr 1fr 1.1fr 0.7fr;
+  min-width: 760px;
+}
+
+.supplements-table .data-row {
+  grid-template-columns: 1fr 0.7fr 0.8fr 1fr 1.35fr;
+  min-width: 820px;
+}
+
+.data-row:last-child {
+  border-bottom: 0;
+}
+
+.data-row > span {
+  display: grid;
+  align-content: start;
+  gap: 3px;
+  padding: 10px;
+  border-right: 1px solid var(--line);
+  font-size: 13px;
+}
+
+.data-row > span:last-child {
+  border-right: 0;
+}
+
+.data-head {
+  background: #f4eef9;
+  color: #7652a7;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.data-row small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.row-actions {
+  display: flex !important;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
 .plan-facts {
   margin-bottom: 16px;
 }
@@ -1439,6 +1601,55 @@ label,
   width: 18px;
   height: 18px;
   accent-color: #7652a7;
+}
+
+.plan-builder-form .builder-nav {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #fff;
+}
+
+.builder-nav a {
+  flex: 0 0 auto;
+  padding: 8px 10px;
+  border-radius: 6px;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 850;
+  text-decoration: none;
+}
+
+.builder-nav a:hover {
+  background: var(--surface-soft);
+}
+
+.plan-builder-form .form-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #fff;
+}
+
+.plan-builder-form .form-section {
+  padding: 18px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+}
+
+.plan-builder-form .form-section:last-child {
+  border-bottom: 0;
+}
+
+.plan-builder-form .form-section h3 {
+  color: var(--green-deep);
 }
 
 .history-list {
@@ -1913,6 +2124,8 @@ textarea {
   .stage-grid,
   .ingredient-preset-grid,
   .plan-section-preview,
+  .plan-dashboard,
+  .record-grid,
   .document-checklist,
   .locked-actions,
   .food-grid,
@@ -1943,10 +2156,28 @@ textarea {
   }
 
   .plan-summary-card,
+  .plan-console-header,
   .stage-card-top,
   .history-item {
     grid-template-columns: 1fr;
     display: grid;
+  }
+
+  .plan-index {
+    position: static;
+    display: flex;
+    overflow-x: auto;
+  }
+
+  .plan-index a,
+  .builder-nav a {
+    white-space: nowrap;
+  }
+
+  .data-row,
+  .ingredients-table .data-row,
+  .supplements-table .data-row {
+    min-width: 760px;
   }
 
   .stage-actions,
