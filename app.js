@@ -1,11 +1,22 @@
 import { appConfig } from "./config.js";
 
-const KEY = "nutrim-vet-v18";
+const KEY = "nutrim-vet-v19";
 const EMPTY_DB = { patients: [], plans: [], stages: [], docs: [], alerts: [], foods: [], supplements: [] };
-["nutrivetm-data-v1", "nutrim-vet-data-v2", "nutrim-vet-v16", "nutrim-vet-v17"].forEach((key) => localStorage.removeItem(key));
+const storage = (() => {
+  try {
+    if (!window.localStorage) return null;
+    const probe = "__nutrim_vet_storage_probe__";
+    window.localStorage.setItem(probe, "1");
+    window.localStorage.removeItem(probe);
+    return window.localStorage;
+  } catch {
+    return null;
+  }
+})();
+["nutrivetm-data-v1", "nutrim-vet-data-v2", "nutrim-vet-v16", "nutrim-vet-v17", "nutrim-vet-v18"].forEach((key) => storage?.removeItem(key));
 let db = { ...EMPTY_DB };
 try {
-  db = { ...EMPTY_DB, ...JSON.parse(localStorage.getItem(KEY) || "{}") };
+  db = { ...EMPTY_DB, ...JSON.parse(storage?.getItem(KEY) || "{}") };
 } catch {
   db = { ...EMPTY_DB };
 }
@@ -19,7 +30,7 @@ db.supplements = [...new Set([...(db.supplements || []), ...["Omega 3", "Calcio"
 const state = { auth: false, role: "vet", view: "home", patientId: db.patients[0]?.id || "", sheet: "" };
 const types = ["Transicion a natural", "Dieta mixta", "BARF", "Cocida", "Mantenimiento", "Descenso de peso", "Aumento de peso", "Digestiva", "Renal", "Hepatica", "Dermatologica", "Otro"];
 
-function save() { localStorage.setItem(KEY, JSON.stringify(db)); }
+function save() { storage?.setItem(KEY, JSON.stringify(db)); }
 function $(q) { return document.querySelector(q); }
 function patient() { if (!db.patients.length) return null; if (!state.patientId) state.patientId = db.patients[0].id; return db.patients.find((p) => p.id === state.patientId) || db.patients[0]; }
 function plan() { return db.plans.find((p) => p.patientId === state.patientId) || null; }
