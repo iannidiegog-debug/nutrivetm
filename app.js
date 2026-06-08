@@ -13,6 +13,7 @@ const store = {
   patientDetailOpen: false,
   followupMode: "view",
   planMode: "view",
+  planSection: "",
   editingPlanId: "",
   editingStageId: "",
   navigationHistory: [],
@@ -1344,17 +1345,12 @@ function renderSupplementsTable(supplements, schedule) {
 
 function renderPlans() {
   const selected = getPet(store.selectedPetId);
-  if (store.planMode === "new") {
-    return renderNewPlanForm(selected);
-  }
-  if (store.planMode === "stage") {
-    return renderPlanStageForm(selected);
-  }
-  const activePlan = getActivePlan(selected.id);
+  const activePlan = getUsablePlan(selected.id);
   const stages = activePlan ? getPlanStages(activePlan.id) : [];
+  const sections = activePlan ? getPlanSectionsStatus(activePlan, stages) : [];
   return `
     <div class="plan-workbench">
-      <section class="panel wide plan-console">
+      <section class="panel wide plan-console ${store.planMode !== "view" ? "sheet-dimmed" : ""}">
         <div class="section-heading">
           <div>
             <span class="eyebrow">Plan alimentario</span>
@@ -1372,60 +1368,294 @@ function renderPlans() {
                 <div>
                   <span class="badge">${activePlan.status}</span>
                   <h3>${activePlan.title}</h3>
-                  <p>${activePlan.planType || "Tipo pendiente"} · ${activePlan.estimatedDuration || "Duracion a definir"}</p>
+                  <p>${activePlan.planType || "Tipo sin definir"} · ${activePlan.estimatedDuration || "Duracion sin definir"}</p>
                 </div>
                 <div class="section-actions">
-                  <button class="soft-button compact" data-edit-plan="${activePlan.id}">Editar datos</button>
-                  <button class="soft-button compact" data-plan-mode="stage">Nueva etapa</button>
+                  <button class="soft-button compact" data-plan-section="general" data-edit-plan="${activePlan.id}">Editar</button>
                   <button class="primary-button compact" data-export-plan="${activePlan.id}">Exportar PDF</button>
                 </div>
               </div>
-              <div class="plan-dashboard">
-                <aside class="plan-index">
-                  <a href="#plan-resumen">Resumen</a>
-                  <a href="#plan-etapas">Etapas</a>
-                  <a href="#plan-ingredientes">Ingredientes</a>
-                  <a href="#plan-suplementos">Suplementos</a>
-                  <a href="#plan-tutor">Tutor</a>
-                </aside>
-                <div class="plan-record">
-                  <section id="plan-resumen" class="record-section">
-                    <h3>Resumen clinico</h3>
-                    <div class="record-grid">
-                      ${recordItem("Tutor", selected.tutor)}
-                      ${recordItem("Peso actual", `${selected.weight} kg`)}
-                      ${recordItem("Peso objetivo", `${selected.targetWeight} kg`)}
-                      ${recordItem("Condicion", selected.bodyScore)}
-                      ${recordItem("Objetivo", activePlan.objective || "Pendiente")}
-                      ${recordItem("Proximo control", activePlan.nextControlDate ? formatDateLabel(activePlan.nextControlDate) : "A definir")}
-                    </div>
-                  </section>
-                  <section id="plan-etapas" class="record-section">
-                    <div class="section-heading compact-heading">
-                      <h3>Etapas y comidas</h3>
-                      <button class="soft-button compact" data-plan-mode="stage">Agregar etapa</button>
-                    </div>
-                    ${renderStagesTable(stages)}
-                  </section>
-                  <section id="plan-ingredientes" class="record-section">
-                    <h3>Ingredientes permitidos</h3>
-                    ${renderIngredientsTable(activePlan.ingredients || [])}
-                  </section>
-                  <section id="plan-suplementos" class="record-section">
-                    <h3>Suplementacion</h3>
-                    ${renderSupplementsTable(activePlan.supplements || [], activePlan.supplementSchedule || {})}
-                  </section>
-                  <section id="plan-tutor" class="record-section">
-                    <h3>Vista tutor</h3>
-                    ${renderTutorPlanPreview(selected, activePlan, stages)}
-                  </section>
-                </div>
+              <div class="plan-section-menu">
+                ${sections
+                  .map(
+                    (section) => `
+                      <button class="plan-section-button" data-plan-section="${section.id}" data-edit-plan="${activePlan.id}">
+                        <span>
+                          <strong>${section.title}</strong>
+                          <small>${section.description}</small>
+                        </span>
+                        <em class="${section.ready ? "ready" : ""}">${section.ready ? "Cargado" : "Pendiente"}</em>
+                      </button>
+                    `
+                  )
+                  .join("")}
               </div>
             `
-            : renderEmptyState("Plan pendiente", "Crear un plan para que las etapas, controles y alertas queden vinculados a este paciente.")
+            : `
+              <div class="empty-state plan-empty-state">
+                <h3>Sin plan cargado para ${selected.name}</h3>
+                <p>El plan se crea para el paciente seleccionado. No se carga informacion de ejemplo ni datos de otro paciente.</p>
+                <button class="primary-button" data-plan-mode="new">Crear plan</button>
+              </div>
+            `
         }
       </section>
+      ${store.planMode !== "view" ? renderPlanSheet(selected, activePlan, stages) : ""}
     </div>
+  `;
+}
+
+function getUsablePlan(patientId) {
+  const plan = getActivePlan(patientId);
+  if (!plan || isPlaceholderPlan(plan)) return null;
+  return plan;
+}
+
+function isPlaceholderPlan(plan) {
+  return ["Plan nutricional pendiente", `Plan nutricional de ${getPet(plan.patientId).name}`].includes(plan.title);
+}
+
+function getPlanSectionsStatus(plan, stages) {
+  return [
+    {
+      id: "general",
+      title: "Datos generales",
+      description: plan.objective || "Nombre, tipo, objetivo, fechas y estado.",
+      ready: Boolean(plan.title && plan.objective),
+    },
+    {
+      id: "ration",
+      title: "Racion diaria",
+      description: plan.dailyRation?.total || "Total diario y distribucion.",
+      ready: Boolean(plan.dailyRation?.total || plan.dailyRation?.details),
+    },
+    {
+      id: "stages",
+      title: "Etapas",
+      description: stages.length ? `${stages.length} etapa${stages.length === 1 ? "" : "s"} cargada${stages.length === 1 ? "" : "s"}.` : "Semanas, dias y comidas.",
+      ready: stages.length > 0,
+    },
+    {
+      id: "ingredients",
+      title: "Ingredientes",
+      description: plan.ingredients?.length ? `${plan.ingredients.length} ingrediente${plan.ingredients.length === 1 ? "" : "s"}.` : "Seleccionar o cargar ingredientes.",
+      ready: Boolean(plan.ingredients?.length),
+    },
+    {
+      id: "cooking",
+      title: "Preparacion",
+      description: plan.cookingNotes?.length ? "Indicaciones cargadas." : "Coccion, viandas y conservacion.",
+      ready: Boolean(plan.cookingNotes?.length),
+    },
+    {
+      id: "supplements",
+      title: "Suplementos",
+      description: plan.supplements?.length ? `${plan.supplements.length} suplemento${plan.supplements.length === 1 ? "" : "s"}.` : "Dosis y esquema semanal.",
+      ready: Boolean(plan.supplements?.length),
+    },
+    {
+      id: "message",
+      title: "Mensaje tutor",
+      description: plan.tutorMessage ? "Mensaje final cargado." : "Indicaciones finales visibles.",
+      ready: Boolean(plan.tutorMessage),
+    },
+  ];
+}
+
+function renderPlanSheet(selected, plan, stages) {
+  const mode = store.planMode;
+  const section = store.planSection || "general";
+  const title = mode === "new" ? "Crear plan" : mode === "stage" ? "Etapa del plan" : getPlanSheetTitle(section);
+  return `
+    <div class="ios-sheet-backdrop" data-close-plan-sheet>
+      <section class="ios-sheet" role="dialog" aria-modal="true" aria-label="${title}">
+        <div class="sheet-grabber"></div>
+        <header class="sheet-header">
+          <div>
+            <span class="eyebrow">${selected.name}</span>
+            <h2>${title}</h2>
+          </div>
+          <button class="ghost-button compact" data-close-plan-sheet>Cerrar</button>
+        </header>
+        <div class="sheet-scroll">
+          ${mode === "new" ? renderCreatePlanSheet(selected) : mode === "stage" ? renderStageSheet(selected, plan) : renderPlanSectionSheet(selected, plan, stages, section)}
+        </div>
+      </section>
+    </div>
+  `;
+}
+
+function getPlanSheetTitle(section) {
+  const titles = {
+    general: "Datos generales",
+    ration: "Racion diaria",
+    stages: "Etapas",
+    ingredients: "Ingredientes",
+    cooking: "Preparacion",
+    supplements: "Suplementos",
+    message: "Mensaje tutor",
+  };
+  return titles[section] || "Plan";
+}
+
+function renderCreatePlanSheet(selected) {
+  return `
+    <form class="sheet-form" data-new-plan-form>
+      <div class="fixed-patient-box">
+        <span>Paciente seleccionado</span>
+        <strong>${selected.name}</strong>
+        <small>${selected.species} · ${selected.tutor}</small>
+      </div>
+      <label>Nombre del plan<input name="planTitle" required /></label>
+      <label>Tipo de plan
+        <select name="planType">
+          ${["Transicion a natural", "Dieta mixta", "BARF", "Cocida", "Mantenimiento", "Descenso de peso", "Aumento de peso", "Digestiva", "Renal", "Hepatica", "Dermatologica", "Otro"].map((type) => `<option>${type}</option>`).join("")}
+        </select>
+      </label>
+      <label>Objetivo<textarea name="objective" rows="3"></textarea></label>
+      <label>Fecha de inicio<input name="startDate" type="date" value="${toDateInput(today)}" /></label>
+      <label>Duracion estimada<input name="duration" /></label>
+      <label>Estado
+        <select name="status">
+          <option value="borrador">Borrador</option>
+          <option value="activo">Activo</option>
+        </select>
+      </label>
+      <div class="form-actions">
+        <button class="ghost-button" type="button" data-close-plan-sheet>Cancelar</button>
+        <button class="primary-button" type="submit">Crear plan</button>
+      </div>
+    </form>
+  `;
+}
+
+function renderPlanSectionSheet(selected, plan, stages, section) {
+  if (!plan) return "";
+  const renderers = {
+    general: () => renderGeneralSheet(selected, plan),
+    ration: () => renderRationSheet(plan),
+    stages: () => renderStagesSheet(stages),
+    ingredients: () => renderIngredientsSheet(plan),
+    cooking: () => renderCookingSheet(plan),
+    supplements: () => renderSupplementsSheet(plan),
+    message: () => renderMessageSheet(plan),
+  };
+  return (renderers[section] || renderers.general)();
+}
+
+function renderGeneralSheet(selected, plan) {
+  return `
+    <form class="sheet-form" data-plan-section-form="general">
+      <div class="fixed-patient-box"><span>Paciente</span><strong>${selected.name}</strong><small>${selected.tutor}</small></div>
+      <label>Nombre del plan<input name="planTitle" value="${plan.title || ""}" required /></label>
+      <label>Tipo<select name="planType">${["Transicion a natural", "Dieta mixta", "BARF", "Cocida", "Mantenimiento", "Descenso de peso", "Aumento de peso", "Digestiva", "Renal", "Hepatica", "Dermatologica", "Otro"].map((type) => `<option ${plan.planType === type ? "selected" : ""}>${type}</option>`).join("")}</select></label>
+      <label>Objetivo<textarea name="objective" rows="4">${plan.objective || ""}</textarea></label>
+      <label>Fecha de inicio<input name="startDate" type="date" value="${plan.startDate || toDateInput(today)}" /></label>
+      <label>Duracion estimada<input name="duration" value="${plan.estimatedDuration || ""}" /></label>
+      <label>Estado<select name="status">${["borrador", "activo", "finalizado", "suspendido"].map((status) => `<option value="${status}" ${plan.status === status ? "selected" : ""}>${capitalize(status)}</option>`).join("")}</select></label>
+      <label>Proximo control<input name="nextControlDate" type="date" value="${plan.nextControlDate || ""}" /></label>
+      <div class="form-actions"><button class="primary-button" type="submit">Guardar</button></div>
+    </form>
+  `;
+}
+
+function renderRationSheet(plan) {
+  return `
+    <form class="sheet-form" data-plan-section-form="ration">
+      <label>Total diario<input name="dailyTotal" value="${plan.dailyRation?.total || ""}" /></label>
+      <label>Distribucion<textarea name="dailyRationText" rows="7">${plan.dailyRation?.details || ""}</textarea></label>
+      <div class="form-actions"><button class="primary-button" type="submit">Guardar</button></div>
+    </form>
+  `;
+}
+
+function renderStagesSheet(stages) {
+  return `
+    <div class="sheet-list">
+      <button class="primary-button" data-plan-mode="stage">Agregar etapa</button>
+      ${stages.length ? stages.map((stage) => `
+        <button class="sheet-list-item" data-stage-action="edit" data-stage-id="${stage.id}">
+          <span><strong>${stage.name}</strong><small>${stage.status} · ${formatMealFrequency(stage.mealCount)}</small></span>
+        </button>
+      `).join("") : `<p class="muted">Todavia no hay etapas cargadas.</p>`}
+    </div>
+  `;
+}
+
+function renderIngredientsSheet(plan) {
+  return `
+    <form class="sheet-form" data-plan-section-form="ingredients">
+      <label>Agregar desde biblioteca
+        <select name="ingredientToAdd">
+          <option value="">Seleccionar ingrediente</option>
+          ${(store.ingredientLibrary.length ? store.ingredientLibrary : ingredientTemplates).map((item) => `<option value="${item.name}">${item.name} · ${item.category || "Otros"}</option>`).join("")}
+        </select>
+      </label>
+      <label>Ingredientes cargados<textarea name="ingredientsText" rows="9">${serializeIngredients(plan.ingredients || [])}</textarea></label>
+      <label class="toggle-line"><input name="saveIngredientTemplate" type="checkbox" /><span>Guardar nuevos como reutilizables</span></label>
+      <div class="form-actions"><button class="primary-button" type="submit">Guardar</button></div>
+    </form>
+  `;
+}
+
+function renderCookingSheet(plan) {
+  return `
+    <form class="sheet-form" data-plan-section-form="cooking">
+      <label>Indicaciones de preparacion<textarea name="cookingNotes" rows="10">${(plan.cookingNotes || []).join("\n")}</textarea></label>
+      <div class="form-actions"><button class="primary-button" type="submit">Guardar</button></div>
+    </form>
+  `;
+}
+
+function renderSupplementsSheet(plan) {
+  return `
+    <form class="sheet-form" data-plan-section-form="supplements">
+      <label>Agregar desde biblioteca
+        <select name="supplementToAdd">
+          <option value="">Seleccionar suplemento</option>
+          ${(store.supplementLibrary.length ? store.supplementLibrary : supplementTemplates).map((item) => `<option value="${item.name}">${item.name}</option>`).join("")}
+        </select>
+      </label>
+      <label>Suplementos cargados<textarea name="supplementsText" rows="8">${serializeSupplements(plan.supplements || [])}</textarea></label>
+      ${renderSupplementScheduleEditor(plan.supplements || [], plan.supplementSchedule || {})}
+      <div class="form-actions"><button class="primary-button" type="submit">Guardar</button></div>
+    </form>
+  `;
+}
+
+function renderMessageSheet(plan) {
+  return `
+    <form class="sheet-form" data-plan-section-form="message">
+      <label>Mensaje final visible para el tutor<textarea name="tutorMessage" rows="10">${plan.tutorMessage || ""}</textarea></label>
+      <label>Observaciones internas<textarea name="observations" rows="4">${plan.observations || ""}</textarea></label>
+      <div class="form-actions"><button class="primary-button" type="submit">Guardar</button></div>
+    </form>
+  `;
+}
+
+function renderStageSheet(selected, plan) {
+  const editingStage = store.editingStageId ? store.nutritionPlanStages.find((stage) => stage.id === store.editingStageId) : null;
+  if (!plan) return "";
+  return `
+    <form class="sheet-form" data-stage-form>
+      <label>Nombre de etapa<input name="stageName" value="${editingStage?.name || ""}" required /></label>
+      <label>Duracion<select name="durationType">${["por dias", "por semana", "por fechas", "personalizado"].map((type) => `<option ${editingStage?.durationType === type ? "selected" : ""}>${type}</option>`).join("")}</select></label>
+      <div class="mini-grid">
+        <label>Dia desde<input name="dayFrom" type="number" value="${editingStage?.dayFrom || 1}" /></label>
+        <label>Dia hasta<input name="dayTo" type="number" value="${editingStage?.dayTo || 15}" /></label>
+      </div>
+      <label>Objetivo<textarea name="stageObjective" rows="3">${editingStage?.objective || ""}</textarea></label>
+      <label>Comidas por dia<input name="mealCount" value="${editingStage?.mealCount || "2"}" /></label>
+      <label>Mañana<textarea name="mealMorning" rows="3">${editingStage?.meals?.morning || ""}</textarea></label>
+      <label>Tarde<textarea name="mealAfternoon" rows="3">${editingStage?.meals?.afternoon || ""}</textarea></label>
+      <label>Noche<textarea name="mealNight" rows="3">${editingStage?.meals?.night || ""}</textarea></label>
+      <label>Indicaciones<textarea name="mealDetails" rows="4">${editingStage?.mealDetailsText || ""}</textarea></label>
+      <label>Estado<select name="stageStatus">${["pendiente", "activa", "completada", "suspendida"].map((status) => `<option value="${status}" ${editingStage?.status === status ? "selected" : ""}>${capitalize(status)}</option>`).join("")}</select></label>
+      <label>Alimentos prohibidos<textarea name="forbiddenFoods" rows="3">${editingStage?.forbiddenFoods || ""}</textarea></label>
+      <label>Observaciones tutor<textarea name="tutorNotes" rows="3">${editingStage?.tutorNotes || ""}</textarea></label>
+      <label>Proximo control<input name="nextControlDate" type="date" value="${editingStage?.nextControlDate || ""}" /></label>
+      <div class="form-actions"><button class="primary-button" type="submit">Guardar etapa</button></div>
+    </form>
   `;
 }
 
@@ -2664,6 +2894,7 @@ function getNavigationSnapshot() {
     patientDetailOpen: store.patientDetailOpen,
     followupMode: store.followupMode,
     planMode: store.planMode,
+    planSection: store.planSection,
     editingPlanId: store.editingPlanId,
     editingStageId: store.editingStageId,
     activeCalendarDate: store.activeCalendarDate,
@@ -2677,6 +2908,7 @@ function restoreNavigationSnapshot(snapshot) {
   store.patientDetailOpen = Boolean(snapshot.patientDetailOpen);
   store.followupMode = snapshot.followupMode || "view";
   store.planMode = snapshot.planMode || "view";
+  store.planSection = snapshot.planSection || "";
   store.editingPlanId = snapshot.editingPlanId || "";
   store.editingStageId = snapshot.editingStageId || "";
   store.activeCalendarDate = snapshot.activeCalendarDate || store.activeCalendarDate;
@@ -2689,6 +2921,7 @@ function navigateTo(view, options = {}) {
     patientMode: options.patientMode || (view === "patients" ? "detail" : store.patientMode),
     followupMode: options.followupMode || (view === "followup" ? "view" : store.followupMode),
     planMode: options.planMode || (view === "plans" ? "view" : store.planMode),
+    planSection: options.planSection || "",
     editingPlanId: options.editingPlanId || "",
     editingStageId: options.editingStageId || "",
     patientDetailOpen: Boolean(options.patientDetailOpen),
@@ -2835,6 +3068,7 @@ function initializeRelationalData() {
     store.nutritionPlans
       .filter((plan) => plan.patientId === pet.id)
       .forEach((plan) => {
+        cleanupAutoFilledPlanContent(plan);
         plan.tutorId = plan.tutorId || pet.tutorId;
         plan.planType = plan.planType || (plan.objective?.includes("Transicion") ? "Transicion a natural" : "Cocida");
         plan.patientSnapshot = plan.patientSnapshot || {
@@ -2849,13 +3083,13 @@ function initializeRelationalData() {
           history: pet.notes || "",
           measures: "",
         };
-        plan.advice = Array.isArray(plan.advice) && plan.advice.length ? plan.advice : planAdviceTemplates.slice();
-        plan.ingredients = Array.isArray(plan.ingredients) && plan.ingredients.length ? plan.ingredients : ingredientTemplates.slice(0, pet.id === "mora" ? 10 : 6).map((item) => ({ id: crypto.randomUUID(), ...item, amount: "", frequency: "", observations: "", visible: true }));
-        plan.cookingNotes = Array.isArray(plan.cookingNotes) && plan.cookingNotes.length ? plan.cookingNotes : cookingTemplates.slice();
-        plan.dailyRation = plan.dailyRation || { total: pet.nutrition?.dailyAmount || "A definir", details: "" };
-        plan.supplements = Array.isArray(plan.supplements) && plan.supplements.length ? plan.supplements : supplementTemplates.slice(0, 3).map((item) => ({ id: crypto.randomUUID(), ...item, administration: item.indication, visible: true }));
+        plan.advice = Array.isArray(plan.advice) ? plan.advice : [];
+        plan.ingredients = Array.isArray(plan.ingredients) ? plan.ingredients : [];
+        plan.cookingNotes = Array.isArray(plan.cookingNotes) ? plan.cookingNotes : [];
+        plan.dailyRation = plan.dailyRation || { total: "", details: "" };
+        plan.supplements = Array.isArray(plan.supplements) ? plan.supplements : [];
         plan.supplementSchedule = plan.supplementSchedule || {};
-        plan.tutorMessage = plan.tutorMessage || tutorMessageTemplates.join("\n");
+        plan.tutorMessage = plan.tutorMessage || "";
         plan.pdfExports = Array.isArray(plan.pdfExports) ? plan.pdfExports : [];
       });
     if (!store.followups.some((item) => item.patientId === pet.id) && Array.isArray(pet.weights) && pet.weights.length) {
@@ -2892,6 +3126,35 @@ function initializeRelationalData() {
       createdAt: new Date().toISOString(),
     });
   });
+}
+
+function cleanupAutoFilledPlanContent(plan) {
+  const ingredientNames = new Set(ingredientTemplates.map((item) => item.name.toLowerCase()));
+  const supplementNames = new Set(supplementTemplates.map((item) => item.name.toLowerCase()));
+  const hasOnlyTemplateIngredients =
+    Array.isArray(plan.ingredients) &&
+    plan.ingredients.length > 0 &&
+    plan.ingredients.every((item) => ingredientNames.has(item.name?.toLowerCase()) && !item.amount && !item.frequency && !item.observations);
+  const hasOnlyTemplateSupplements =
+    Array.isArray(plan.supplements) &&
+    plan.supplements.length > 0 &&
+    plan.supplements.every((item) => supplementNames.has(item.name?.toLowerCase()) && !item.dose && !item.frequency && !item.observations);
+  if (Array.isArray(plan.advice) && plan.advice.join("\n") === planAdviceTemplates.join("\n")) {
+    plan.advice = [];
+  }
+  if (hasOnlyTemplateIngredients) {
+    plan.ingredients = [];
+  }
+  if (Array.isArray(plan.cookingNotes) && plan.cookingNotes.join("\n") === cookingTemplates.join("\n")) {
+    plan.cookingNotes = [];
+  }
+  if (hasOnlyTemplateSupplements) {
+    plan.supplements = [];
+    plan.supplementSchedule = {};
+  }
+  if (plan.tutorMessage === tutorMessageTemplates.join("\n")) {
+    plan.tutorMessage = "";
+  }
 }
 
 function getRequiredText(data, key) {
@@ -3115,6 +3378,7 @@ function createFollowup(form) {
 function createPlan(form) {
   const data = new FormData(form);
   const patientId = store.selectedPetId;
+  const pet = getPet(patientId);
   const title = getRequiredText(data, "planTitle");
   if (!title) {
     alert("Completá el nombre del plan.");
@@ -3129,7 +3393,7 @@ function createPlan(form) {
   const supplements = parseSupplements(getRequiredText(data, "supplementsText"), data.getAll("supplementPreset").map((item) => item.toString()));
   const planData = {
     patientId,
-    tutorId: getPet(patientId).tutorId,
+    tutorId: pet.tutorId,
     title,
     planType: getRequiredText(data, "planType"),
     startDate: getRequiredText(data, "startDate") || toDateInput(today),
@@ -3139,15 +3403,15 @@ function createPlan(form) {
     observations: getRequiredText(data, "observations"),
     nextControlDate: getRequiredText(data, "nextControlDate"),
     patientSnapshot: {
-      name: getRequiredText(data, "patientName"),
-      species: getRequiredText(data, "patientSpecies"),
+      name: getRequiredText(data, "patientName") || pet.name,
+      species: getRequiredText(data, "patientSpecies") || pet.species,
       sex: getRequiredText(data, "patientSex"),
-      breed: getRequiredText(data, "patientBreed"),
-      age: getRequiredText(data, "patientAge"),
-      weight: getRequiredText(data, "patientWeight"),
-      bodyScore: getRequiredText(data, "patientBodyScore"),
-      diseases: getRequiredText(data, "patientDiseases"),
-      history: getRequiredText(data, "patientHistory"),
+      breed: getRequiredText(data, "patientBreed") || pet.breed,
+      age: getRequiredText(data, "patientAge") || pet.age,
+      weight: getRequiredText(data, "patientWeight") || pet.weight,
+      bodyScore: getRequiredText(data, "patientBodyScore") || pet.bodyScore,
+      diseases: getRequiredText(data, "patientDiseases") || pet.pathologies || "",
+      history: getRequiredText(data, "patientHistory") || pet.notes || "",
       measures: getRequiredText(data, "patientMeasures"),
     },
     advice: splitLines(getRequiredText(data, "adviceText")),
@@ -3174,7 +3438,6 @@ function createPlan(form) {
     };
     store.nutritionPlans.unshift(plan);
   }
-  const pet = getPet(patientId);
   pet.status = plan.status === "activo" ? "Plan activo" : "Plan en borrador";
   const nextControlDate = plan.nextControlDate;
   if (data.get("createAppointment") === "on" && nextControlDate) {
@@ -3297,6 +3560,52 @@ function saveReusablePlanOptions(plan) {
   if (plan.tutorMessage && !store.tutorMessageLibrary.some((item) => item.text?.toLowerCase() === plan.tutorMessage.toLowerCase())) {
     store.tutorMessageLibrary.push({ id: crypto.randomUUID(), text: plan.tutorMessage });
   }
+}
+
+function savePlanSection(form, section) {
+  const plan = getUsablePlan(store.selectedPetId);
+  if (!plan) return;
+  const data = new FormData(form);
+  if (section === "general") {
+    plan.title = getRequiredText(data, "planTitle") || plan.title;
+    plan.planType = getRequiredText(data, "planType");
+    plan.objective = getRequiredText(data, "objective");
+    plan.startDate = getRequiredText(data, "startDate");
+    plan.estimatedDuration = getRequiredText(data, "duration");
+    plan.status = getRequiredText(data, "status") || plan.status;
+    plan.nextControlDate = getRequiredText(data, "nextControlDate");
+  }
+  if (section === "ration") {
+    plan.dailyRation = {
+      total: getRequiredText(data, "dailyTotal"),
+      details: getRequiredText(data, "dailyRationText"),
+    };
+  }
+  if (section === "ingredients") {
+    const selected = getRequiredText(data, "ingredientToAdd") ? [getRequiredText(data, "ingredientToAdd")] : [];
+    plan.ingredients = parseIngredients(getRequiredText(data, "ingredientsText"), selected);
+    if (data.get("saveIngredientTemplate") === "on") {
+      saveReusablePlanOptions(plan);
+    }
+  }
+  if (section === "cooking") {
+    plan.cookingNotes = splitLines(getRequiredText(data, "cookingNotes"));
+  }
+  if (section === "supplements") {
+    const selected = getRequiredText(data, "supplementToAdd") ? [getRequiredText(data, "supplementToAdd")] : [];
+    plan.supplements = parseSupplements(getRequiredText(data, "supplementsText"), selected);
+    plan.supplementSchedule = getSupplementSchedule(data, plan.supplements);
+  }
+  if (section === "message") {
+    plan.tutorMessage = getRequiredText(data, "tutorMessage");
+    plan.observations = getRequiredText(data, "observations");
+  }
+  plan.updatedAt = new Date().toISOString();
+  addClinicalHistory(plan.patientId, "plan_alimentario", plan.id, "Plan actualizado", getPlanSheetTitle(section), toDateInput(today));
+  store.planMode = "view";
+  store.planSection = "";
+  savePersistentData();
+  render();
 }
 
 function handleStageAction(action, stageId) {
@@ -3513,6 +3822,7 @@ function bindEvents() {
       }
       store.followupMode = "view";
       store.planMode = "view";
+      store.planSection = "";
       store.editingStageId = "";
       render();
     });
@@ -3679,9 +3989,29 @@ function bindEvents() {
     });
   });
 
+  document.querySelectorAll("[data-plan-section]").forEach((button) => {
+    button.addEventListener("click", () => {
+      navigateTo("plans", {
+        planMode: "section",
+        planSection: button.dataset.planSection,
+        editingPlanId: button.dataset.editPlan || "",
+      });
+    });
+  });
+
+  document.querySelectorAll("[data-close-plan-sheet]").forEach((element) => {
+    element.addEventListener("click", (event) => {
+      if (event.target !== element && !element.matches("button")) return;
+      store.planMode = "view";
+      store.planSection = "";
+      store.editingStageId = "";
+      render();
+    });
+  });
+
   document.querySelectorAll("[data-edit-plan]").forEach((button) => {
     button.addEventListener("click", () => {
-      navigateTo("plans", { planMode: "new", editingPlanId: button.dataset.editPlan });
+      navigateTo("plans", { planMode: "section", planSection: button.dataset.planSection || "general", editingPlanId: button.dataset.editPlan });
     });
   });
 
@@ -3695,6 +4025,13 @@ function bindEvents() {
     form.addEventListener("submit", (event) => {
       event.preventDefault();
       createPlan(form);
+    });
+  });
+
+  document.querySelectorAll("[data-plan-section-form]").forEach((form) => {
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      savePlanSection(form, form.dataset.planSectionForm);
     });
   });
 
