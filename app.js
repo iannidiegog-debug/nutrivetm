@@ -1,6 +1,6 @@
 import { appConfig } from "./config.js";
 
-const KEY = "nutrim-vet-v19";
+const KEY = "nutrim-vet-v20";
 const EMPTY_DB = { patients: [], plans: [], stages: [], docs: [], alerts: [], foods: [], supplements: [] };
 const storage = (() => {
   try {
@@ -13,7 +13,7 @@ const storage = (() => {
     return null;
   }
 })();
-["nutrivetm-data-v1", "nutrim-vet-data-v2", "nutrim-vet-v16", "nutrim-vet-v17", "nutrim-vet-v18"].forEach((key) => storage?.removeItem(key));
+["nutrivetm-data-v1", "nutrim-vet-data-v2", "nutrim-vet-v16", "nutrim-vet-v17", "nutrim-vet-v18", "nutrim-vet-v19"].forEach((key) => storage?.removeItem(key));
 let db = { ...EMPTY_DB };
 try {
   db = { ...EMPTY_DB, ...JSON.parse(storage?.getItem(KEY) || "{}") };
@@ -172,7 +172,6 @@ function empty(h, p) { return `<div class="empty-state"><h3>${h}</h3><p>${p}</p>
 function text(d, k) { return d.get(k)?.toString().trim() || ""; }
 function optionList(d, selectKey, textKey, otherKey) { return [...new Set([...d.getAll(selectKey).filter((x) => x && x !== "Otro"), text(d, otherKey), ...text(d, textKey).split("\n").map((x) => x.trim())].filter(Boolean))]; }
 function multiSelect(name, options, selected = [], label = "Seleccionar", otherField = "") { return `<label>${label}<select name="${name}" multiple size="7" ${otherField ? `data-other-toggle="${otherField}"` : ""}>${options.map((x) => `<option value="${x}" ${selected.includes(x) ? "selected" : ""}>${x}</option>`).join("")}</select><small class="field-hint">Podes seleccionar varios manteniendo Cmd/Ctrl o tocando opciones en mobile.</small></label>`; }
-function id() { return crypto.randomUUID(); }
 
 if ("serviceWorker" in navigator) navigator.serviceWorker.getRegistrations?.().then((r) => r.forEach((x) => x.unregister()));
 if ("caches" in window) caches.keys().then((keys) => keys.forEach((key) => caches.delete(key)));
