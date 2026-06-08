@@ -1,13 +1,19 @@
 import { appConfig } from "./config.js";
 
-const KEY = "nutrim-vet-v16";
-["nutrivetm-data-v1", "nutrim-vet-data-v2"].forEach((key) => localStorage.removeItem(key));
-const db = JSON.parse(localStorage.getItem(KEY) || '{"patients":[],"plans":[],"stages":[],"docs":[],"alerts":[],"foods":[],"supplements":[]}');
-db.patients = db.patients.filter((p) => !["mora", "luna", "tango"].includes((p.name || "").toLowerCase()));
-db.plans ||= [];
-db.stages ||= [];
-db.docs ||= [];
-db.alerts ||= [];
+const KEY = "nutrim-vet-v18";
+const EMPTY_DB = { patients: [], plans: [], stages: [], docs: [], alerts: [], foods: [], supplements: [] };
+["nutrivetm-data-v1", "nutrim-vet-data-v2", "nutrim-vet-v16", "nutrim-vet-v17"].forEach((key) => localStorage.removeItem(key));
+let db = { ...EMPTY_DB };
+try {
+  db = { ...EMPTY_DB, ...JSON.parse(localStorage.getItem(KEY) || "{}") };
+} catch {
+  db = { ...EMPTY_DB };
+}
+db.patients = Array.isArray(db.patients) ? db.patients.filter((p) => !["mora", "luna", "tango"].includes((p.name || "").toLowerCase())) : [];
+db.plans = Array.isArray(db.plans) ? db.plans : [];
+db.stages = Array.isArray(db.stages) ? db.stages : [];
+db.docs = Array.isArray(db.docs) ? db.docs : [];
+db.alerts = Array.isArray(db.alerts) ? db.alerts : [];
 db.foods = [...new Set([...(db.foods || []), ...["Cerdo", "Solomillo", "Carre", "Bondiola", "Zanahoria", "Calabaza", "Batata", "Manzana", "Aceite de oliva", "Sopa moro", "Gastrointestinal", "Ricota", "Huevo", "Yogurt natural"]])];
 db.supplements = [...new Set([...(db.supplements || []), ...["Omega 3", "Calcio", "Glutamina", "Huevo", "Yogurt natural"]])];
 const state = { auth: false, role: "vet", view: "home", patientId: db.patients[0]?.id || "", sheet: "" };
