@@ -114,6 +114,10 @@ label,
   position: relative;
   min-height: 100vh;
   overflow: hidden;
+  background:
+    radial-gradient(circle at 72% 18%, rgba(221, 239, 229, 0.34), transparent 32%),
+    radial-gradient(circle at 16% 82%, rgba(201, 120, 90, 0.22), transparent 28%),
+    linear-gradient(135deg, #2f5540 0%, #719180 56%, #e8eee7 100%);
 }
 
 .login-visual img {
@@ -692,6 +696,9 @@ label,
   position: relative;
   min-height: 310px;
   overflow: hidden;
+  background:
+    radial-gradient(circle at 85% 18%, rgba(221, 239, 229, 0.45), transparent 30%),
+    linear-gradient(135deg, #315a43 0%, #719180 62%, #eef4ee 100%);
 }
 
 .dashboard-hero {

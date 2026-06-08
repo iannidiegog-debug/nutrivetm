@@ -1,4 +1,4 @@
-const CACHE_NAME = "nutrim-vet-cache-killer-v20";
+const CACHE_NAME = "nutrim-vet-cache-killer-v21";
 
 self.addEventListener("install", (event) => {
   self.skipWaiting();

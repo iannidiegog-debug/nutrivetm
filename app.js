@@ -1,6 +1,6 @@
 import { appConfig } from "./config.js";
 
-const KEY = "nutrim-vet-v20";
+const KEY = "nutrim-vet-v21";
 const EMPTY_DB = { patients: [], plans: [], stages: [], docs: [], alerts: [], foods: [], supplements: [] };
 const storage = (() => {
   try {
@@ -13,7 +13,7 @@ const storage = (() => {
     return null;
   }
 })();
-["nutrivetm-data-v1", "nutrim-vet-data-v2", "nutrim-vet-v16", "nutrim-vet-v17", "nutrim-vet-v18", "nutrim-vet-v19"].forEach((key) => storage?.removeItem(key));
+["nutrivetm-data-v1", "nutrim-vet-data-v2", "nutrim-vet-v16", "nutrim-vet-v17", "nutrim-vet-v18", "nutrim-vet-v19", "nutrim-vet-v20"].forEach((key) => storage?.removeItem(key));
 let db = { ...EMPTY_DB };
 try {
   db = { ...EMPTY_DB, ...JSON.parse(storage?.getItem(KEY) || "{}") };
@@ -44,7 +44,7 @@ function render() {
 }
 
 function login() {
-  return `<main class="login-shell"><section class="login-visual"><img src="assets/nutrivetm-hero.png" alt="Consultorio veterinario" /><div class="login-copy"><span class="brand-mark">NM</span><span class="eyebrow">${appConfig.appName}</span><h1>Acceso al seguimiento nutricional veterinario.</h1><p>Ingreso preparado para conectar con autenticacion real.</p></div></section><section class="login-panel"><span class="eyebrow">Ingresar</span><h2>Acceso</h2><form class="login-form" data-login><label>Perfil<span class="select-wrap"><select name="role"><option value="vet">Veterinaria</option><option value="tutor">Tutor</option></select></span></label><label>Usuario<input /></label><label>Contrasena<input type="password" /></label><button class="primary-button submit">Entrar</button></form></section></main>`;
+  return `<main class="login-shell"><section class="login-visual"><div class="login-copy"><span class="brand-mark">NM</span><span class="eyebrow">${appConfig.appName}</span><h1>Acceso al seguimiento nutricional veterinario.</h1><p>Ingreso preparado para conectar con autenticacion real.</p></div></section><section class="login-panel"><span class="eyebrow">Ingresar</span><h2>Acceso</h2><form class="login-form" data-login><label>Perfil<span class="select-wrap"><select name="role"><option value="vet">Veterinaria</option><option value="tutor">Tutor</option></select></span></label><label>Usuario<input /></label><label>Contrasena<input type="password" /></label><button class="primary-button submit">Entrar</button></form></section></main>`;
 }
 
 function home() {
@@ -63,7 +63,7 @@ function view() {
   if (state.view === "plans") return plans();
   if (state.view === "alerts") return panel("Alertas clinicas", db.alerts.length ? db.alerts.map((a) => `<article class="alert-card"><span class="badge danger">${a.severity}</span><h3>${a.title}</h3><p>${a.text}</p></article>`).join("") : empty("Sin alertas", "Las alertas apareceran aca."));
   if (state.view === "calendar") return panel("Turnos", empty("Agenda limpia", "Los turnos reales apareceran aca."));
-  return `<div class="dashboard-grid"><section class="hero-panel dashboard-hero"><img src="assets/nutrivetm-hero.png" alt="Perro y gato" /><div class="hero-copy"><span class="eyebrow">${appConfig.appName}</span><h2>Nutricion veterinaria, agenda y seguimiento en un solo panel.</h2><p>Gestiona pacientes, planes alimentarios, turnos y alertas clinicas desde una plataforma simple y profesional.</p></div></section><section class="metrics">${metric("Pacientes en seguimiento", db.patients.length, "patients")}${metric("Turnos proximos", 0, "calendar")}${metric("Alertas clinicas", db.alerts.length, "alerts", "danger")}${metric("Planes activos", db.plans.filter((p) => p.status === "activo").length, "plans")}</section></div>`;
+  return `<div class="dashboard-grid"><section class="hero-panel dashboard-hero"><div class="hero-copy"><span class="eyebrow">${appConfig.appName}</span><h2>Nutricion veterinaria, agenda y seguimiento en un solo panel.</h2><p>Gestiona pacientes, planes alimentarios, turnos y alertas clinicas desde una plataforma simple y profesional.</p></div></section><section class="metrics">${metric("Pacientes en seguimiento", db.patients.length, "patients")}${metric("Turnos proximos", 0, "calendar")}${metric("Alertas clinicas", db.alerts.length, "alerts", "danger")}${metric("Planes activos", db.plans.filter((p) => p.status === "activo").length, "plans")}</section></div>`;
 }
 
 function patients() {
