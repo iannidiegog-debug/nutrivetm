@@ -2,16 +2,22 @@ import { appConfig } from "./config.js";
 
 const KEY = "nutrim-vet-v16";
 ["nutrivetm-data-v1", "nutrim-vet-data-v2"].forEach((key) => localStorage.removeItem(key));
-const db = JSON.parse(localStorage.getItem(KEY) || '{"patients":[],"plans":[],"docs":[],"alerts":[]}');
+const db = JSON.parse(localStorage.getItem(KEY) || '{"patients":[],"plans":[],"stages":[],"docs":[],"alerts":[],"foods":[],"supplements":[]}');
 db.patients = db.patients.filter((p) => !["mora", "luna", "tango"].includes((p.name || "").toLowerCase()));
+db.plans ||= [];
+db.stages ||= [];
+db.docs ||= [];
+db.alerts ||= [];
+db.foods = [...new Set([...(db.foods || []), ...["Cerdo", "Solomillo", "Carre", "Bondiola", "Zanahoria", "Calabaza", "Batata", "Manzana", "Aceite de oliva", "Sopa moro", "Gastrointestinal", "Ricota", "Huevo", "Yogurt natural"]])];
+db.supplements = [...new Set([...(db.supplements || []), ...["Omega 3", "Calcio", "Glutamina", "Huevo", "Yogurt natural"]])];
 const state = { auth: false, role: "vet", view: "home", patientId: db.patients[0]?.id || "", sheet: "" };
 const types = ["Transicion a natural", "Dieta mixta", "BARF", "Cocida", "Mantenimiento", "Descenso de peso", "Aumento de peso", "Digestiva", "Renal", "Hepatica", "Dermatologica", "Otro"];
-const foods = ["Cerdo", "Solomillo", "Carre", "Bondiola", "Zanahoria", "Calabaza", "Batata", "Manzana", "Aceite de oliva", "Sopa moro", "Gastrointestinal", "Ricota", "Huevo", "Yogurt natural"];
 
 function save() { localStorage.setItem(KEY, JSON.stringify(db)); }
 function $(q) { return document.querySelector(q); }
 function patient() { if (!db.patients.length) return null; if (!state.patientId) state.patientId = db.patients[0].id; return db.patients.find((p) => p.id === state.patientId) || db.patients[0]; }
 function plan() { return db.plans.find((p) => p.patientId === state.patientId) || null; }
+function stages() { return db.stages.filter((s) => s.planId === plan()?.id); }
 function esc(x = "") { return String(x).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;"); }
 function id() { return crypto.randomUUID(); }
 
@@ -62,28 +68,34 @@ function plans() {
 }
 
 function planMenu(pl) {
-  const items = [["general", "Datos generales", pl.objective], ["ration", "Racion diaria", pl.ration], ["ingredients", "Ingredientes", (pl.ingredients || []).join(", ")], ["prep", "Preparacion", pl.prep], ["message", "Mensaje tutor", pl.message]];
+  const items = [["general", "Datos generales", pl.objective], ["stages", "Etapas", stages().length ? `${stages().length} etapa(s)` : ""], ["ingredients", "Ingredientes", (pl.ingredients || []).join(", ")], ["prep", "Preparacion", pl.prep], ["supplements", "Suplementos", (pl.supplements || []).join(", ")], ["message", "Mensaje tutor", pl.message]];
   return `<div class="plan-console-header"><div><span class="badge">${pl.status}</span><h3>${pl.title}</h3><p>${pl.type || "Tipo pendiente"} · ${pl.duration || "Duracion pendiente"}</p></div></div><div class="plan-section-menu">${items.map(([k, t, v]) => `<button class="plan-section-button" data-section="${k}"><span><strong>${t}</strong><small>${v || "Pendiente"}</small></span><em class="${v ? "ready" : ""}">${v ? "Cargado" : "Pendiente"}</em></button>`).join("")}</div>`;
 }
 
 function sheet(pl) {
-  const name = { newPlan: "Crear plan", general: "Datos generales", ration: "Racion diaria", ingredients: "Ingredientes", prep: "Preparacion", message: "Mensaje tutor" }[state.sheet];
+  const name = { newPlan: "Crear plan", general: "Datos generales", stages: "Etapas", newStage: "Nueva etapa", ingredients: "Ingredientes", prep: "Preparacion", supplements: "Suplementos", message: "Mensaje tutor" }[state.sheet];
   return `<div class="ios-sheet-backdrop" data-close><section class="ios-sheet"><div class="sheet-grabber"></div><header class="sheet-header"><div><span class="eyebrow">${patient().name}</span><h2>${name}</h2></div><button class="ghost-button compact" data-close>Cerrar</button></header><div class="sheet-scroll">${state.sheet === "newPlan" ? newPlanForm() : sectionForm(pl)}</div></section></div>`;
 }
 
 function newPlanForm() {
-  return `<form class="sheet-form" data-save-plan><div class="fixed-patient-box"><span>Paciente seleccionado</span><strong>${patient().name}</strong><small>${patient().species} · ${patient().tutor}</small></div><label>Nombre del plan<input name="title" required /></label><label>Tipo<select name="type"><option value="">Seleccionar</option>${types.map((x) => `<option>${x}</option>`).join("")}</select></label><label>Objetivo<textarea name="objective" rows="3"></textarea></label><label>Duracion estimada<input name="duration" /></label><label>Estado<select name="status"><option>borrador</option><option>activo</option></select></label><div class="form-actions"><button class="primary-button">Crear plan</button></div></form>`;
+  return `<form class="sheet-form" data-save-plan><div class="fixed-patient-box"><span>Paciente seleccionado</span><strong>${patient().name}</strong><small>${patient().species} · ${patient().tutor}</small></div><label>Nombre del plan<input name="title" required /></label><label>Tipo<select name="type" data-other-toggle="typeOther"><option value="">Seleccionar</option>${types.map((x) => `<option>${x}</option>`).join("")}</select></label><label class="is-hidden" data-other-field="typeOther">Tipo personalizado<input name="typeOther" /></label><label>Objetivo<textarea name="objective" rows="3"></textarea></label><label>Fecha de inicio<input name="startDate" type="date" /></label><label>Duracion estimada<input name="duration" /></label><label>Estado<select name="status"><option>borrador</option><option>activo</option></select></label><label>Proximo control<input name="nextControl" type="date" /></label><div class="form-actions"><button class="primary-button">Crear plan</button></div></form>`;
 }
 
 function sectionForm(pl) {
+  if (state.sheet === "stages") return `<div class="sheet-list"><button class="primary-button" data-new-stage>Agregar etapa</button>${stages().map((s) => `<article class="sheet-list-item"><span><strong>${s.name}</strong><small>Dias ${s.dayFrom || "-"} a ${s.dayTo || "-"} · ${s.status || "pendiente"}</small></span></article>`).join("") || "<p class='muted'>Todavia no hay etapas cargadas.</p>"}</div>`;
+  if (state.sheet === "newStage") return stageForm();
   const html = {
-    general: `<label>Nombre<input name="title" value="${esc(pl.title)}" required /></label><label>Tipo<select name="type"><option value="">Seleccionar</option>${types.map((x) => `<option ${pl.type === x ? "selected" : ""}>${x}</option>`).join("")}</select></label><label>Objetivo<textarea name="objective" rows="4">${esc(pl.objective)}</textarea></label><label>Duracion<input name="duration" value="${esc(pl.duration)}" /></label><label>Estado<select name="status">${["borrador", "activo", "finalizado", "suspendido"].map((x) => `<option ${pl.status === x ? "selected" : ""}>${x}</option>`).join("")}</select></label>`,
-    ration: `<label>Racion diaria<textarea name="ration" rows="8">${esc(pl.ration)}</textarea></label>`,
-    ingredients: `<label>Agregar desde biblioteca<select name="add"><option value="">Seleccionar ingrediente</option>${foods.map((x) => `<option>${x}</option>`).join("")}</select></label><label>Ingredientes cargados<textarea name="items" rows="8">${esc((pl.ingredients || []).join("\n"))}</textarea></label>`,
+    general: `<label>Nombre<input name="title" value="${esc(pl.title)}" required /></label><label>Tipo<select name="type" data-other-toggle="typeOther"><option value="">Seleccionar</option>${types.map((x) => `<option ${pl.type === x ? "selected" : ""}>${x}</option>`).join("")}</select></label><label class="${pl.type === "Otro" ? "" : "is-hidden"}" data-other-field="typeOther">Tipo personalizado<input name="typeOther" value="${esc(pl.typeOther)}" /></label><label>Objetivo<textarea name="objective" rows="4">${esc(pl.objective)}</textarea></label><label>Fecha de inicio<input name="startDate" type="date" value="${esc(pl.startDate)}" /></label><label>Duracion estimada<input name="duration" value="${esc(pl.duration)}" /></label><label>Estado<select name="status">${["borrador", "activo", "finalizado", "suspendido"].map((x) => `<option ${pl.status === x ? "selected" : ""}>${x}</option>`).join("")}</select></label><label>Proximo control<input name="nextControl" type="date" value="${esc(pl.nextControl)}" /></label>`,
+    ingredients: `${multiSelect("add", [...db.foods, "Otro"], pl.ingredients || [], "Ingredientes disponibles", "foodOther")}<label class="is-hidden" data-other-field="foodOther">Otro ingrediente<input name="foodOther" /></label><label>Ingredientes cargados<textarea name="items" rows="6">${esc((pl.ingredients || []).join("\n"))}</textarea></label><label class="toggle-line compact-toggle"><input name="saveReusable" type="checkbox" checked /> Guardar nuevos como reutilizables</label>`,
     prep: `<label>Preparacion<textarea name="prep" rows="10">${esc(pl.prep)}</textarea></label>`,
+    supplements: `${multiSelect("add", [...db.supplements, "Otro"], pl.supplements || [], "Suplementos disponibles", "supplementOther")}<label class="is-hidden" data-other-field="supplementOther">Otro suplemento<input name="supplementOther" /></label><label>Suplementos cargados<textarea name="items" rows="6">${esc((pl.supplements || []).join("\n"))}</textarea></label><label class="toggle-line compact-toggle"><input name="saveReusable" type="checkbox" checked /> Guardar nuevos como reutilizables</label>`,
     message: `<label>Mensaje visible para el tutor<textarea name="message" rows="10">${esc(pl.message)}</textarea></label>`,
   }[state.sheet];
   return `<form class="sheet-form" data-save-section>${html}<div class="form-actions"><button class="primary-button">Guardar</button></div></form>`;
+}
+
+function stageForm() {
+  return `<form class="sheet-form" data-save-stage><label>Nombre de etapa<input name="name" required /></label><div class="mini-grid"><label>Dia desde<input name="dayFrom" type="number" /></label><label>Dia hasta<input name="dayTo" type="number" /></label></div><label>Objetivo<textarea name="objective" rows="3"></textarea></label><label>Comidas por dia<input name="mealsPerDay" /></label><label>Mañana<textarea name="morning" rows="3"></textarea></label><label>Tarde<textarea name="afternoon" rows="3"></textarea></label><label>Noche<textarea name="night" rows="3"></textarea></label><label>Indicaciones<textarea name="instructions" rows="4"></textarea></label><label>Estado de la etapa<select name="status"><option>pendiente</option><option>activa</option><option>completada</option><option>suspendida</option></select></label>${multiSelect("forbidden", db.foods, [], "Alimentos prohibidos")}<label>Observaciones para el tutor<textarea name="tutorNotes" rows="3"></textarea></label><label>Proximo control<input name="nextControl" type="date" /></label><div class="form-actions"><button class="primary-button">Guardar etapa</button></div></form>`;
 }
 
 function tutorView() {
@@ -105,17 +117,28 @@ function bind() {
   $("[data-patient-form]")?.addEventListener("submit", savePatient);
   $("[data-plan-new]")?.addEventListener("click", () => { state.sheet = "newPlan"; render(); });
   document.querySelectorAll("[data-section]").forEach((b) => b.addEventListener("click", () => { state.sheet = b.dataset.section; render(); }));
+  $("[data-new-stage]")?.addEventListener("click", () => { state.sheet = "newStage"; render(); });
   document.querySelectorAll("[data-close]").forEach((x) => x.addEventListener("click", (e) => { if (e.target === x || x.matches("button")) { state.sheet = ""; render(); } }));
   $("[data-save-plan]")?.addEventListener("submit", savePlan);
   $("[data-save-section]")?.addEventListener("submit", saveSection);
+  $("[data-save-stage]")?.addEventListener("submit", saveStage);
   $("[data-access]")?.addEventListener("click", () => { patient().tutorAccess = !patient().tutorAccess; save(); render(); });
   $("[data-docs]")?.addEventListener("submit", saveDocs);
   $("[data-urgent]")?.addEventListener("submit", saveUrgent);
+  document.querySelectorAll("[data-other-toggle]").forEach((select) => {
+    const update = () => {
+      const field = document.querySelector(`[data-other-field="${select.dataset.otherToggle}"]`);
+      field?.classList.toggle("is-hidden", select.value !== "Otro" && !Array.from(select.selectedOptions || []).some((option) => option.value === "Otro"));
+    };
+    select.addEventListener("change", update);
+    update();
+  });
 }
 
 function savePatient(e) { e.preventDefault(); const d = new FormData(e.currentTarget); if (!text(d, "name") || !text(d, "species") || !text(d, "tutor") || (!text(d, "dni") && !text(d, "email"))) return alert("Completa animal, especie, tutor y DNI o email."); const p = { id: id(), name: text(d, "name"), species: text(d, "species"), breed: text(d, "breed"), weight: text(d, "weight"), targetWeight: text(d, "targetWeight"), allergies: text(d, "allergies"), medication: text(d, "medication"), tutor: text(d, "tutor"), dni: text(d, "dni"), email: text(d, "email"), tutorAccess: d.get("tutorAccess") === "on", status: "Pendiente plan" }; db.patients.unshift(p); state.patientId = p.id; state.sheet = ""; save(); render(); }
-function savePlan(e) { e.preventDefault(); const d = new FormData(e.currentTarget); db.plans.unshift({ id: id(), patientId: patient().id, title: text(d, "title"), type: text(d, "type"), objective: text(d, "objective"), duration: text(d, "duration"), status: text(d, "status"), ingredients: [] }); state.sheet = ""; save(); render(); }
-function saveSection(e) { e.preventDefault(); const d = new FormData(e.currentTarget), p = plan(); if (state.sheet === "general") Object.assign(p, { title: text(d, "title"), type: text(d, "type"), objective: text(d, "objective"), duration: text(d, "duration"), status: text(d, "status") }); if (state.sheet === "ration") p.ration = text(d, "ration"); if (state.sheet === "ingredients") p.ingredients = [...new Set([text(d, "add"), ...text(d, "items").split("\n").map((x) => x.trim())].filter(Boolean))]; if (state.sheet === "prep") p.prep = text(d, "prep"); if (state.sheet === "message") p.message = text(d, "message"); state.sheet = ""; save(); render(); }
+function savePlan(e) { e.preventDefault(); const d = new FormData(e.currentTarget); const type = text(d, "type"); db.plans.unshift({ id: id(), patientId: patient().id, title: text(d, "title"), type, typeOther: type === "Otro" ? text(d, "typeOther") : "", objective: text(d, "objective"), startDate: text(d, "startDate"), duration: text(d, "duration"), status: text(d, "status"), nextControl: text(d, "nextControl"), ingredients: [], supplements: [] }); state.sheet = ""; save(); render(); }
+function saveSection(e) { e.preventDefault(); const d = new FormData(e.currentTarget), p = plan(); if (state.sheet === "general") { const type = text(d, "type"); Object.assign(p, { title: text(d, "title"), type, typeOther: type === "Otro" ? text(d, "typeOther") : "", objective: text(d, "objective"), startDate: text(d, "startDate"), duration: text(d, "duration"), status: text(d, "status"), nextControl: text(d, "nextControl") }); } if (state.sheet === "ingredients") { p.ingredients = optionList(d, "add", "items", "foodOther"); if (d.get("saveReusable") === "on") db.foods = [...new Set([...db.foods, ...p.ingredients])]; } if (state.sheet === "prep") p.prep = text(d, "prep"); if (state.sheet === "supplements") { p.supplements = optionList(d, "add", "items", "supplementOther"); if (d.get("saveReusable") === "on") db.supplements = [...new Set([...db.supplements, ...p.supplements])]; } if (state.sheet === "message") p.message = text(d, "message"); state.sheet = ""; save(); render(); }
+function saveStage(e) { e.preventDefault(); const d = new FormData(e.currentTarget); const item = { id: id(), planId: plan().id, patientId: patient().id, name: text(d, "name"), dayFrom: text(d, "dayFrom"), dayTo: text(d, "dayTo"), objective: text(d, "objective"), mealsPerDay: text(d, "mealsPerDay"), morning: text(d, "morning"), afternoon: text(d, "afternoon"), night: text(d, "night"), instructions: text(d, "instructions"), status: text(d, "status"), forbidden: d.getAll("forbidden"), tutorNotes: text(d, "tutorNotes"), nextControl: text(d, "nextControl") }; db.stages.push(item); state.sheet = "stages"; save(); render(); }
 function saveDocs(e) { e.preventDefault(); db.docs.push(...Array.from(e.currentTarget.files.files || []).map((f) => ({ name: f.name }))); save(); state.view = "tutor-calendar"; render(); }
 function saveUrgent(e) { e.preventDefault(); const d = new FormData(e.currentTarget); db.alerts.unshift({ title: "Urgencia", severity: text(d, "severity"), text: text(d, "reason") }); save(); alert("La alerta fue enviada."); render(); }
 
@@ -130,6 +153,8 @@ function locked() { return panel("No habilitado", empty("Acceso pendiente", "Pri
 function detail(k, v) { return `<div class="detail"><span>${k}</span><strong>${v || "Pendiente"}</strong></div>`; }
 function empty(h, p) { return `<div class="empty-state"><h3>${h}</h3><p>${p}</p></div>`; }
 function text(d, k) { return d.get(k)?.toString().trim() || ""; }
+function optionList(d, selectKey, textKey, otherKey) { return [...new Set([...d.getAll(selectKey).filter((x) => x && x !== "Otro"), text(d, otherKey), ...text(d, textKey).split("\n").map((x) => x.trim())].filter(Boolean))]; }
+function multiSelect(name, options, selected = [], label = "Seleccionar", otherField = "") { return `<label>${label}<select name="${name}" multiple size="7" ${otherField ? `data-other-toggle="${otherField}"` : ""}>${options.map((x) => `<option value="${x}" ${selected.includes(x) ? "selected" : ""}>${x}</option>`).join("")}</select><small class="field-hint">Podes seleccionar varios manteniendo Cmd/Ctrl o tocando opciones en mobile.</small></label>`; }
 function id() { return crypto.randomUUID(); }
 
 if ("serviceWorker" in navigator) navigator.serviceWorker.getRegistrations?.().then((r) => r.forEach((x) => x.unregister()));

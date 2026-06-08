@@ -1308,6 +1308,30 @@ label,
   accent-color: var(--green);
 }
 
+.compact-toggle {
+  justify-content: center;
+  align-self: center;
+  width: fit-content;
+  min-height: 0;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: var(--surface-soft);
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.is-hidden {
+  display: none !important;
+}
+
+.field-hint {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
 .checkbox-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
